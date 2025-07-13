@@ -1,7 +1,7 @@
 // src/dashboard_pages/CreateAvatar.jsx
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-import { useAuth } from '../AuthContext';
+import { useAuth } from '../contexts/AuthContext';
 import supabase  from '../supabaseClient';
 import { Upload, Mic, Image, Video, Save, Loader2, Globe, Lock } from 'lucide-react';
 

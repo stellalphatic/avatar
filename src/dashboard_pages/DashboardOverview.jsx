@@ -1,7 +1,7 @@
 // src/dashboard_pages/DashboardOverview.jsx
 import React, { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import { useAuth } from '../AuthContext';
+import { useAuth } from '../contexts/AuthContext';
 import { Zap, Mic, Video, Cloud } from 'lucide-react';
 import supabase  from '../supabaseClient'; 
 import { Link } from 'react-router-dom';

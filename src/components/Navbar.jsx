@@ -5,7 +5,7 @@ import { useTheme } from '../contexts/ThemeContext';
 import { motion } from 'framer-motion';
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom'; // Import Link and useNavigate
-import { useAuth } from '../AuthContext'; // Import useAuth
+import { useAuth } from '../contexts/AuthContext'; // Import useAuth
 
 const Navbar = () => {
   const { theme, toggleTheme } = useTheme();

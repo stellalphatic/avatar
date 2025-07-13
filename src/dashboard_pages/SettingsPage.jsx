@@ -1,7 +1,7 @@
 // src/dashboard_pages/SettingsPage.jsx
 import React, { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import { useAuth } from '../AuthContext';
+import { useAuth } from '../contexts/AuthContext';
 import  supabase  from '../supabaseClient';
 import { Loader2, AlertCircle } from 'lucide-react';
 

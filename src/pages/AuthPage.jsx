@@ -2,24 +2,9 @@
 import React, { useState, useEffect } from 'react'; // Added useEffect
 import { motion } from 'framer-motion';
 import { useNavigate, useLocation } from 'react-router-dom'; // Added useLocation
-import { useAuth } from '../AuthContext';
-// Correct way to import icons from lucide-react
-import { X, Check } from 'lucide-react'; // Corrected imports
+import { useAuth } from '../contexts/AuthContext';
 
-const GitHubIcon = ({ size = 24, className = "" }) => (
-    <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="currentColor" className={className}>
-        <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.08-.731.082-.716.082-.716 1.205.082 1.838 1.235 1.838 1.235 1.07 1.835 2.809 1.305 3.493.998.108-.77.418-1.305.762-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.312.465-2.384 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1-.322 3.292 1.233.955-.265 1.961-.397 2.964-.397.998 0 2.004.132 2.959.397 2.292-1.555 3.292-1.233 3.292-1.233.645 1.653.24 2.873.105 3.176.77.835 1.235 1.908 1.235 3.22 0 4.61-2.801 5.625-5.476 5.92-.42.365-.818 1.096-.818 2.222v3.293c0 .319.192.602.798.577C20.562 21.789 24 17.302 24 12c0-6.627-5.372-12-12-12z"/>
-    </svg>
-);
-
-const GoogleIcon = ({ size = 24, className = "" }) => (
-    <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="currentColor" className={className}>
-        <path d="M22.56 12.25c0-.78-.07-1.5-.18-2.2H12v4.26h6.15c-.25 1.18-.84 2.15-1.74 2.76v3.29h4.22c2.47-2.28 3.9-5.64 3.9-9.06z" fill="#4285F4"/>
-        <path d="M12 23c3.2 0 5.86-1.07 7.82-2.92l-4.22-3.29c-1.15.77-2.6 1.22-3.6 1.22-2.98 0-5.5-2-6.42-4.63H1.93v3.37c1.78 3.51 5.37 6.03 10.07 6.03z" fill="#34A853"/>
-        <path d="M5.58 14.16c-.23-.69-.37-1.42-.37-2.16s.14-1.47.37-2.16V6.5h-3.6C1.45 7.8 1 9.8 1 12s.45 4.2 1.98 5.5z" fill="#FBBC05"/>
-        <path d="M12 5.09c1.77 0 3.3.62 4.53 1.76l3.71-3.71C17.82 1.45 15.2 0 12 0 7.37 0 3.78 2.52 1.93 6.03l3.6 2.81c.92-2.63 3.44-4.63 6.47-4.63z" fill="#EA4335"/>
-    </svg>
-);
+import { GoogleIcon, GitHubIcon, XIcon, CheckIcon } from '../utils/icons';
 
 // Mock 3D component (replace with your actual 3D scene)
 const ThreeDScene = () => (
@@ -130,7 +115,7 @@ const PricingModal = ({ onClose, onPlanSelected }) => { // Added onPlanSelected 
                 onClick={e => e.stopPropagation()}
             >
                 <button onClick={onClose} className="absolute top-4 right-4 text-muted-foreground hover:text-foreground">
-                    <X size={24} />
+                    <XIcon size={24} />
                 </button>
                 <h2 className="text-3xl font-bold text-center text-foreground mb-8">Choose Your Plan</h2>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -149,7 +134,7 @@ const PricingModal = ({ onClose, onPlanSelected }) => { // Added onPlanSelected 
                             <ul className="text-left text-muted-foreground mb-6 space-y-2 flex-grow">
                                 {plan.features.map((feature, idx) => (
                                     <li key={idx} className="flex items-center gap-2">
-                                        <Check className="w-4 h-4 text-green-500" /> {feature}
+                                        <CheckIcon className="w-4 h-4 text-green-500" /> {feature}
                                     </li>
                                 ))}
                             </ul>
