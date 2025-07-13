@@ -1,21 +1,35 @@
+// src/Navbar.jsx
 import React from 'react';
 import { Moon, Sun, Menu, X } from 'lucide-react';
 import { useTheme } from '../contexts/ThemeContext';
 import { motion } from 'framer-motion';
 import { useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom'; // Import Link and useNavigate
+import { useAuth } from '../AuthContext'; // Import useAuth
 
 const Navbar = () => {
   const { theme, toggleTheme } = useTheme();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const { user, signOut } = useAuth(); // Get user and signOut from AuthContext
+  const navigate = useNavigate();
 
   const navItems = [
-    { name: 'About', href: '#' },
+    { name: 'About', href: '#' }, // You might want to make these actual routes later
     { name: 'Pricing', href: '#' },
     { name: 'API Docs', href: '#' },
   ];
 
+  const handleLogout = async () => {
+    const { error } = await signOut();
+    if (!error) {
+      navigate('/'); // Redirect to home page after logout
+    } else {
+      console.error('Logout error:', error.message);
+    }
+  };
+
   return (
-    <motion.nav 
+    <motion.nav
       initial={{ y: -100 }}
       animate={{ y: 0 }}
       transition={{ duration: 0.5 }}
@@ -24,17 +38,17 @@ const Navbar = () => {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-16">
           {/* Logo */}
-          <motion.div 
-            whileHover={{ scale: 1.05 }}
-            className="flex items-center space-x-2"
-          >
-            <div className="w-8 h-8 bg-gradient-to-r from-purple-500 to-pink-500 rounded-lg flex items-center justify-center">
+          <Link to="/" className="flex items-center space-x-2"> {/* Use Link */}
+            <motion.div
+              whileHover={{ scale: 1.05 }}
+              className="w-8 h-8 bg-gradient-to-r from-purple-500 to-pink-500 rounded-lg flex items-center justify-center"
+            >
               <span className="text-white font-bold text-sm">A</span>
-            </div>
+            </motion.div>
             <span className="text-xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">
               AVATAR
             </span>
-          </motion.div>
+          </Link>
 
           {/* Desktop Navigation */}
           <div className="hidden md:flex items-center space-x-8">
@@ -48,7 +62,7 @@ const Navbar = () => {
                 {item.name}
               </motion.a>
             ))}
-            
+
             <div className="flex items-center space-x-4">
               <motion.button
                 whileHover={{ scale: 1.05 }}
@@ -58,24 +72,46 @@ const Navbar = () => {
               >
                 {theme === 'light' ? <Moon size={20} /> : <Sun size={20} />}
               </motion.button>
-              
-              <motion.a
-                href="#"
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                className="px-4 py-2 text-purple-600 dark:text-purple-400 hover:text-purple-700 dark:hover:text-purple-300 transition-colors duration-200"
-              >
-                Log In
-              </motion.a>
-              
-              <motion.a
-                href="#"
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                className="px-6 py-2 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-lg hover:from-purple-700 hover:to-pink-700 transition-all duration-200"
-              >
-                Sign Up
-              </motion.a>
+
+              {user ? (
+                <>
+                  <motion.button
+                    onClick={() => navigate('/dashboard')} // Navigate to dashboard
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    className="px-4 py-2 text-purple-600 dark:text-purple-400 hover:text-purple-700 dark:hover:text-purple-300 transition-colors duration-200"
+                  >
+                    Dashboard
+                  </motion.button>
+                  <motion.button
+                    onClick={handleLogout}
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    className="px-6 py-2 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-lg hover:from-purple-700 hover:to-pink-700 transition-all duration-200"
+                  >
+                    Log Out
+                  </motion.button>
+                </>
+              ) : (
+                <>
+                  <motion.button
+                    onClick={() => navigate('/auth')} // Navigate to auth page
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    className="px-4 py-2 text-purple-600 dark:text-purple-400 hover:text-purple-700 dark:hover:text-purple-300 transition-colors duration-200"
+                  >
+                    Log In
+                  </motion.button>
+                  <motion.button
+                    onClick={() => navigate('/auth')} // Navigate to auth page
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    className="px-6 py-2 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-lg hover:from-purple-700 hover:to-pink-700 transition-all duration-200"
+                  >
+                    Sign Up
+                  </motion.button>
+                </>
+              )}
             </div>
           </div>
 
@@ -89,7 +125,7 @@ const Navbar = () => {
             >
               {theme === 'light' ? <Moon size={20} /> : <Sun size={20} />}
             </motion.button>
-            
+
             <motion.button
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
@@ -119,18 +155,37 @@ const Navbar = () => {
                   {item.name}
                 </a>
               ))}
-              <a
-                href="#"
-                className="text-purple-600 dark:text-purple-400 hover:text-purple-700 dark:hover:text-purple-300 transition-colors duration-200"
-              >
-                Log In
-              </a>
-              <a
-                href="#"
-                className="px-6 py-2 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-lg hover:from-purple-700 hover:to-pink-700 transition-all duration-200 text-center"
-              >
-                Sign Up
-              </a>
+              {user ? (
+                <>
+                  <Link
+                    to="/dashboard"
+                    className="text-purple-600 dark:text-purple-400 hover:text-purple-700 dark:hover:text-purple-300 transition-colors duration-200"
+                  >
+                    Dashboard
+                  </Link>
+                  <button
+                    onClick={handleLogout}
+                    className="px-6 py-2 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-lg hover:from-purple-700 hover:to-pink-700 transition-all duration-200 text-center"
+                  >
+                    Log Out
+                  </button>
+                </>
+              ) : (
+                <>
+                  <Link
+                    to="/auth"
+                    className="text-purple-600 dark:text-purple-400 hover:text-purple-700 dark:hover:text-purple-300 transition-colors duration-200"
+                  >
+                    Log In
+                  </Link>
+                  <Link
+                    to="/auth"
+                    className="px-6 py-2 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-lg hover:from-purple-700 hover:to-pink-700 transition-all duration-200 text-center"
+                  >
+                    Sign Up
+                  </Link>
+                </>
+              )}
             </div>
           </motion.div>
         )}
