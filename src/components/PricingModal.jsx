@@ -7,12 +7,12 @@ import { XIcon, CheckIcon } from '../utils/icons';
 
 export const PricingModal = ({ onClose }) => {
     const { user, supabase } = useAuth();
-    const [isYearlyBilling, setIsYearlyBilling] = useState(false); // New state for billing toggle
+    const [isYearlyBilling, setIsYearlyBilling] = useState(false); 
 
     const subscriptionPlans = [
         {
             title: "Creator",
-            description: "For one person", // Mimicking competitor
+            description: "For one person", 
             monthlyPrice: "$24",
             yearlyPrice: "$20", // $24 * 12 * (1 - 0.22) / 12 = ~ $20
             features: [

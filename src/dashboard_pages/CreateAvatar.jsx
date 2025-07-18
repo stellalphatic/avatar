@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { useAuth } from '../contexts/AuthContext';
-import supabase  from '../supabaseClient';
+import supabase from '../supabaseClient';
 import { Upload, Mic, Image, Video, Save, Loader2, Globe, Lock } from 'lucide-react';
 
 const CreateAvatar = () => {
@@ -12,6 +12,7 @@ const CreateAvatar = () => {
     const [voiceFile, setVoiceFile] = useState(null);
     const [videoFile, setVideoFile] = useState(null);
     const [isPublic, setIsPublic] = useState(false); // New state for public/private
+    const [personalityData, setPersonalityData] = useState(''); // New state for personality data
     const [loading, setLoading] = useState(false);
     const [message, setMessage] = useState('');
     const [error, setError] = useState('');
@@ -63,16 +64,16 @@ const CreateAvatar = () => {
             let videoUrl = null;
 
             // Upload files to Supabase Storage
-            if (imageFile) imageUrl = await uploadFileToSupabaseStorage(imageFile, 'avatars', 'images');
-            if (voiceFile) voiceUrl = await uploadFileToSupabaseStorage(voiceFile, 'avatars', 'voices');
-            if (videoFile) videoUrl = await uploadFileToSupabaseStorage(videoFile, 'avatars', 'videos');
+            if (imageFile) imageUrl = await uploadFileToSupabaseStorage(imageFile, 'avatar-media', 'images');
+            if (voiceFile) voiceUrl = await uploadFileToSupabaseStorage(voiceFile, 'avatar-media', 'voices');
+            if (videoFile) videoUrl = await uploadFileToSupabaseStorage(videoFile, 'avatar-media', 'videos');
 
             // Send data to your backend API
             const response = await fetch('http://localhost:5000/api/avatars', { // Your backend URL
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${session.access_token}` // Attach JWT
+                    'Authorization': `Bearer ${session.access_token}`
                 },
                 body: JSON.stringify({
                     name,
@@ -80,6 +81,7 @@ const CreateAvatar = () => {
                     voiceUrl,
                     videoUrl,
                     is_public: isPublic, // Send public/private status
+                    personalityData // Send personality data
                 }),
             });
 
@@ -96,6 +98,7 @@ const CreateAvatar = () => {
             setVoiceFile(null);
             setVideoFile(null);
             setIsPublic(false);
+            setPersonalityData(''); // Reset personality data
             e.target.reset(); // Resets file inputs
         } catch (err) {
             console.error('Avatar creation error:', err);
@@ -131,6 +134,19 @@ const CreateAvatar = () => {
                         className="w-full p-3 rounded-lg bg-input border border-border focus:ring-2 focus:ring-purple-500 outline-none transition-all duration-200 text-foreground"
                         placeholder="e.g., My Professional Avatar"
                     />
+                </div>
+
+                {/* New: Personality Data Input */}
+                <div>
+                    <label htmlFor="personalityData" className="block text-sm font-medium text-muted-foreground mb-2">Personality/Expertise (Optional)</label>
+                    <textarea
+                        id="personalityData"
+                        value={personalityData}
+                        onChange={(e) => setPersonalityData(e.target.value)}
+                        rows="4"
+                        className="w-full p-3 rounded-lg bg-input border border-border focus:ring-2 focus:ring-purple-500 outline-none transition-all duration-200 text-foreground"
+                        placeholder="Describe the avatar's personality, expertise, or role (e.g., 'A friendly financial advisor who specializes in retirement planning')."
+                    ></textarea>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
