@@ -46,7 +46,7 @@ const Navbar = () => {
               <span className="text-white font-bold text-sm">A</span>
             </motion.div>
             <span className="text-xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">
-              AVATAR
+              META PRESENCE
             </span>
           </Link>
 
