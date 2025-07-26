@@ -1,7 +1,7 @@
 // src/pages/AuthPage.jsx
-import React, { useState, useEffect } from 'react'; // Added useEffect
+import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { useNavigate, useLocation } from 'react-router-dom'; // Added useLocation
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 
 import { GoogleIcon, GitHubIcon, XIcon, CheckIcon } from '../utils/icons';
@@ -11,96 +11,31 @@ const ThreeDScene = () => (
     <div className="absolute inset-0 z-0 overflow-hidden">
         <img src="https://via.placeholder.com/1920x1080/4A148C/FFFFFF?text=Interactive+3D+Placeholder" alt="3D Background" className="w-full h-full object-cover animate-pulse" />
         <div className="absolute inset-0 bg-black opacity-50"></div>
-        {/* You'd integrate your actual Three.js/React-three-fiber component here */}
-        {/* Example: <Canvas><ambientLight /><mesh><sphereGeometry /></mesh></Canvas> */}
     </div>
 );
 
-// Pricing Modal Component (can be opened from AuthPage or Dashboard)
-const PricingModal = ({ onClose, onPlanSelected }) => { // Added onPlanSelected prop for clarity
-    const { user, supabase } = useAuth(); // Access user and supabase from AuthContext
-
+// Pricing Modal Component
+const PricingModal = ({ onClose }) => {
     const subscriptionPlans = [
         {
             title: "Free Plan",
             description: "Get started with basic AI avatar generation.",
             price: "$0/month",
-            features: ["Limited features", "5 avatar generations/month", "Standard support"],
-            stripePriceId: import.meta.env.VITE_STRIPE_PRICE_ID_FREE // CORRECTED: Use VITE_ prefix
+            features: ["Limited features", "5 avatar generations/month", "Standard support"]
         },
         {
             title: "Pro Plan",
             description: "Advanced features for professional content creators.",
             price: "$10/month",
-            features: ["All free features", "Unlimited avatar generations", "Priority support", "Early access to new features"],
-            stripePriceId: import.meta.env.VITE_STRIPE_PRICE_ID_PRO // CORRECTED: Use VITE_ prefix
+            features: ["All free features", "Unlimited avatar generations", "Priority support", "Early access to new features"]
         },
         {
             title: "Enterprise",
             description: "Full-featured solution for businesses and teams.",
             price: "$20/month",
-            features: ["All Pro features", "Custom integrations", "Dedicated account manager", "SLA & Uptime guarantees"],
-            stripePriceId: import.meta.env.VITE_STRIPE_PRICE_ID_ENTERPRISE // CORRECTED: Use VITE_ prefix
+            features: ["All Pro features", "Custom integrations", "Dedicated account manager", "SLA & Uptime guarantees"]
         }
     ];
-
-    const handleCheckout = async (plan) => {
-        if (!user) {
-            alert('Please log in or sign up first to select a plan.');
-            return;
-        }
-
-        try {
-            const { data: { session } } = await supabase.auth.getSession();
-            if (!session) {
-                alert('No active session. Please log in again.');
-                return;
-            }
-
-            // CORRECTED: Use environment variable for backend URL
-            const backendUrl = import.meta.env.VITE_BACKEND_REST_URL;
-            if (!backendUrl) {
-                console.error('VITE_BACKEND_REST_URL is not defined in your .env file.');
-                alert('Backend URL is not configured. Please check your environment variables.');
-                return;
-            }
-
-            const response = await fetch(`${backendUrl}/api/create-checkout-session`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${session.access_token}` // Send JWT
-                },
-                body: JSON.stringify({ priceId: plan.stripePriceId, planName: plan.title })
-            });
-
-            const responseData = await response.json(); // Get the full response
-
-            if (!response.ok) { // Check for HTTP errors (status codes 4xx, 5xx)
-                console.error('Error from backend:', responseData.error || 'Unknown error');
-                alert(`Error: ${responseData.error || 'Failed to create checkout session.'}`);
-                return;
-            }
-
-            const { url, error } = responseData; // Destructure after checking response.ok
-
-            if (error) { // Redundant if response.ok is checked, but good for explicit errors from backend
-                console.error('Error from backend (json):', error);
-                alert(`Error: ${error}`);
-                return;
-            }
-
-            // Redirect to Stripe Checkout page
-            if (url) {
-                window.location.href = url;
-            } else {
-                alert('Failed to get Stripe checkout URL.');
-            }
-        } catch (error) {
-            console.error('Client-side error during checkout:', error);
-            alert('An unexpected error occurred during checkout.');
-        }
-    };
 
     return (
         <motion.div
@@ -139,8 +74,9 @@ const PricingModal = ({ onClose, onPlanSelected }) => { // Added onPlanSelected 
                                 ))}
                             </ul>
                             <button
-                                onClick={() => handleCheckout(plan)}
-                                disabled={plan.title === "Free Plan"} // Disable button for Free Plan
+                                // This button is now purely for UI, as backend logic is removed.
+                                onClick={() => alert(`You selected the ${plan.title}.`)}
+                                disabled={plan.title === "Free Plan"}
                                 className={`mt-auto px-6 py-3 rounded-lg font-semibold text-lg transition-all duration-200
                                     ${plan.title === "Free Plan"
                                         ? "bg-gray-500/20 text-gray-400 cursor-not-allowed"
@@ -163,50 +99,19 @@ const AuthPage = () => {
     const [password, setPassword] = useState('');
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
-    const [showPricingModal, setShowPricingModal] = useState(false); // State for pricing modal
+    const [showPricingModal, setShowPricingModal] = useState(false);
 
-    const { signIn, signUp, signInWithOAuth, user, loading: authLoading, supabase } = useAuth(); // Destructure user, authLoading, supabase
+    const { signIn, signUp, signInWithOAuth, user } = useAuth();
     const navigate = useNavigate();
-    const location = useLocation(); // Get current URL location
 
-    // Effect to check user's plan and show modal if needed
+    // THIS IS THE MOST IMPORTANT CHANGE FOR YOUR REDIRECTS
+    // This useEffect ensures that if a user exists, they are immediately sent to the dashboard.
+    // It runs once on component mount and whenever the 'user' object changes.
     useEffect(() => {
-        const checkUserPlan = async () => {
-            // Only proceed if user is logged in and auth data is loaded
-            if (user && !authLoading) {
-                // Fetch the user's profile to check their plan
-                const { data: profile, error: profileError } = await supabase
-                    .from('profiles')
-                    .select('current_plan')
-                    .eq('id', user.id)
-                    .single();
-
-                if (profileError) {
-                    console.error("Error fetching user profile:", profileError);
-                    // You might want to handle this error gracefully, maybe a generic error message
-                    return;
-                }
-
-                // If user is logged in and has a "Free Plan", show pricing modal
-                // Or if there's no plan recorded (e.g., first login after signup without explicit plan)
-                if (profile && profile.current_plan === 'Free Plan') {
-                    setShowPricingModal(true);
-                }
-            }
-        };
-
-        // Only trigger checkUserPlan if navigating to /dashboard directly after login/signup
-        // or if explicitly on AuthPage and user becomes defined.
-        // This prevents the modal from popping up unnecessarily if user is already on dashboard
-        // and just navigating around.
-        if (user && !authLoading && location.pathname === '/dashboard') {
-            checkUserPlan();
-        } else if (user && !authLoading && location.pathname === '/auth' && !isLogin) {
-            // If it's a new signup, always show modal
-            setShowPricingModal(true);
+        if (user) {
+            navigate('/dashboard');
         }
-
-    }, [user, authLoading, supabase, navigate, isLogin, location.pathname]); // Dependencies for useEffect
+    }, [user, navigate]);
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -223,14 +128,10 @@ const AuthPage = () => {
         if (authResult.error) {
             setError(authResult.error.message);
         } else {
-            console.log('Auth successful:', authResult.data);
+            // For signup with email confirmation, Supabase doesn't return a session, just the user.
+            // The useEffect above will not trigger a redirect in this case, which is correct.
             if (!isLogin && authResult.data?.user && !authResult.data.session) {
-                // For signup, if email confirmation is required but not yet confirmed
                 setError("Please check your email to confirm your account!");
-            } else {
-                // After successful login/signup, navigate to dashboard
-                // The useEffect will then check the user's plan and potentially show the modal
-                navigate('/dashboard');
             }
         }
         setLoading(false);
@@ -239,27 +140,23 @@ const AuthPage = () => {
     const handleOAuthLogin = async (provider) => {
         setLoading(true);
         setError('');
-        const { error } = await signInWithOAuth(provider);
+        
+        // This dynamic redirectTo ensures Supabase sends the user back to the correct domain and path
+        const redirectToUrl = window.location.origin + '/dashboard';
+
+        const { error } = await signInWithOAuth(provider, {
+            redirectTo: redirectToUrl
+        });
+
         if (error) {
             setError(error.message);
-            setLoading(false); // Make sure to reset loading on error
+            setLoading(false);
         }
-        // No setLoading(false) here because signInWithOAuth initiates a redirect,
-        // and the AuthContext's onAuthStateChange listener will handle the user state update
-        // and the useEffect will trigger the plan check.
     };
-
-    // This function is still here but its logic is now mainly handled by the useEffect
-    const handleSelectPlan = () => {
-        // This function might be called if you want to perform actions after a user
-        // interacts with the modal, but the primary navigation/Stripe redirect
-        // is now handled by handleCheckout within the modal.
-        setShowPricingModal(false); // Close the modal
-    };
-
+    
     return (
         <div className="relative min-h-screen flex items-center justify-center overflow-hidden">
-            <ThreeDScene /> {/* Your 3D background */}
+            <ThreeDScene />
 
             <motion.div
                 initial={{ opacity: 0, y: 50 }}
@@ -322,8 +219,7 @@ const AuthPage = () => {
                             className="p-3 border border-border rounded-full flex items-center justify-center bg-background hover:bg-accent transition-colors duration-200"
                             aria-label="Login with Google"
                         >
-                            {/* CHANGE THIS LINE */}
-                            <GoogleIcon size={24} className="text-red-500" /> {/* Corrected: use GoogleIcon */}
+                            <GoogleIcon size={24} className="text-red-500" />
                         </motion.button>
                         <motion.button
                             onClick={() => handleOAuthLogin('github')}
@@ -332,8 +228,7 @@ const AuthPage = () => {
                             className="p-3 border border-border rounded-full flex items-center justify-center bg-background hover:bg-accent transition-colors duration-200"
                             aria-label="Login with GitHub"
                         >
-                            {/* CHANGE THIS LINE */}
-                            <GitHubIcon size={24} className="text-gray-800 dark:text-white" /> {/* Corrected: use GitHubIcon */}
+                            <GitHubIcon size={24} className="text-gray-800 dark:text-white" />
                         </motion.button>
                     </div>
                 </div>
@@ -355,7 +250,6 @@ const AuthPage = () => {
                         </>
                     )}
                     <br />
-                    {/* The "View Pricing Plans" button remains for explicit access */}
                     <button
                         onClick={() => setShowPricingModal(true)}
                         className="mt-4 text-pink-500 hover:underline font-medium"
@@ -365,11 +259,9 @@ const AuthPage = () => {
                 </div>
             </motion.div>
 
-            {/* Render the PricingModal if showPricingModal is true */}
-            {showPricingModal && <PricingModal onClose={() => setShowPricingModal(false)} onPlanSelected={handleSelectPlan} />}
+            {showPricingModal && <PricingModal onClose={() => setShowPricingModal(false)} />}
         </div>
     );
 };
 
 export default AuthPage;
-
