@@ -1,7 +1,7 @@
 // src/pages/AuthPage.jsx
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 
 import { GoogleIcon, GitHubIcon, XIcon, CheckIcon } from '../utils/icons';
@@ -14,8 +14,10 @@ const ThreeDScene = () => (
     </div>
 );
 
-// Pricing Modal Component
-const PricingModal = ({ onClose }) => {
+// Pricing Modal Component (can be opened from AuthPage or Dashboard)
+const PricingModal = ({ onClose, onPlanSelected }) => {
+    // This component no longer contains backend logic,
+    // as per your request to remove pricing/subscription code from this page.
     const subscriptionPlans = [
         {
             title: "Free Plan",
@@ -74,8 +76,7 @@ const PricingModal = ({ onClose }) => {
                                 ))}
                             </ul>
                             <button
-                                // This button is now purely for UI, as backend logic is removed.
-                                onClick={() => alert(`You selected the ${plan.title}.`)}
+                                onClick={() => alert('This button is for display purposes. Functionality is disabled.')}
                                 disabled={plan.title === "Free Plan"}
                                 className={`mt-auto px-6 py-3 rounded-lg font-semibold text-lg transition-all duration-200
                                     ${plan.title === "Free Plan"
@@ -104,9 +105,8 @@ const AuthPage = () => {
     const { signIn, signUp, signInWithOAuth, user } = useAuth();
     const navigate = useNavigate();
 
-    // THIS IS THE MOST IMPORTANT CHANGE FOR YOUR REDIRECTS
-    // This useEffect ensures that if a user exists, they are immediately sent to the dashboard.
-    // It runs once on component mount and whenever the 'user' object changes.
+    // THIS IS THE CORRECT, SIMPLIFIED REDIRECT LOGIC
+    // It runs whenever the 'user' object changes in your AuthContext.
     useEffect(() => {
         if (user) {
             navigate('/dashboard');
@@ -128,8 +128,9 @@ const AuthPage = () => {
         if (authResult.error) {
             setError(authResult.error.message);
         } else {
-            // For signup with email confirmation, Supabase doesn't return a session, just the user.
-            // The useEffect above will not trigger a redirect in this case, which is correct.
+            // For signup with email confirmation, Supabase doesn't return a session.
+            // The user object will be set to null until they confirm their email.
+            // The useEffect will handle navigation only when the user object is valid.
             if (!isLogin && authResult.data?.user && !authResult.data.session) {
                 setError("Please check your email to confirm your account!");
             }
@@ -141,7 +142,8 @@ const AuthPage = () => {
         setLoading(true);
         setError('');
         
-        // This dynamic redirectTo ensures Supabase sends the user back to the correct domain and path
+        // THIS IS THE CRUCIAL FIX FOR PRODUCTION OAUTH REDIRECTS.
+        // It tells Supabase to send the user back to the dashboard of your current domain.
         const redirectToUrl = window.location.origin + '/dashboard';
 
         const { error } = await signInWithOAuth(provider, {
@@ -259,7 +261,7 @@ const AuthPage = () => {
                 </div>
             </motion.div>
 
-            {showPricingModal && <PricingModal onClose={() => setShowPricingModal(false)} />}
+            {showPricingModal && <PricingModal onClose={() => setShowPricingModal(false)} onPlanSelected={() => {}} />}
         </div>
     );
 };
