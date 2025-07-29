@@ -6,6 +6,8 @@ import { AuthProvider } from './contexts/AuthContext';
 import Home from './components/Home';
 import Dashboard from './components/Dashboard'; // Main dashboard layout
 import AuthPage from './pages/AuthPage';
+import ForgotPasswordPage from './pages/ForgotPasswordPage';
+import UpdatePasswordPage from './pages/UpdatePasswordPage';
 import ProtectedRoute from './ProtectedRoute';
 
 // Dashboard Pages (existing and new)
@@ -29,6 +31,8 @@ function App() {
             <Routes>
               <Route path="/" element={<Home />} />
               <Route path="/auth" element={<AuthPage />} />
+              <Route path="/auth/forgot-password" element={<ForgotPasswordPage />} /> 
+              <Route path="/auth/update-password" element={<UpdatePasswordPage />} /> 
               {/* Optional: Direct pricing page route */}
               <Route path="/pricing" element={<PricingPage />} />
 

@@ -1,4 +1,4 @@
-// src/Navbar.jsx
+// src/components/Navbar.jsx
 import React from 'react';
 import { Moon, Sun, Menu, X } from 'lucide-react';
 import { useTheme } from '../contexts/ThemeContext';

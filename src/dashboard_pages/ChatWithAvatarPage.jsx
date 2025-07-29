@@ -399,10 +399,11 @@ const ChatWithAvatarPage = () => {
                 setInputMessage(''); // Clear interim input
 
                 // Determine which WebSocket to send to based on active connection
-                if (audioCallActive && voiceCallWsConnected && voiceCallWs.readyState === WebSocket.OPEN) {
+                // CORRECTED: Directly check the WebSocket object's readyState for reliability
+                if (voiceCallWs && voiceCallWs.readyState === WebSocket.OPEN) {
                     // Send to voice chat WebSocket (for real-time conversation)
                     voiceCallWs.send(JSON.stringify({ type: 'user_text', text: finalTranscript }));
-                } else if (textChatWsConnected && textChatWs.readyState === WebSocket.OPEN) {
+                } else if (textChatWs && textChatWs.readyState === WebSocket.OPEN) {
                     // Send to text chat WebSocket (for voice messages within text chat)
                     textChatWs.send(JSON.stringify({ type: 'text', message: finalTranscript }));
                 } else {

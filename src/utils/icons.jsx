@@ -191,7 +191,7 @@ export const Volume2Icon = ({ size = 24, className = "", strokeWidth = 2, color 
     </svg>
 );
 
-// New: VolumeXIcon (for sound OFF/Mute) - also useful for the chat page's "stop speaking"
+
 export const VolumeXIcon = ({ size = 24, className = "", strokeWidth = 2, color = "currentColor" }) => (
     <svg
         xmlns="http://www.w3.org/2000/svg"
@@ -209,4 +209,47 @@ export const VolumeXIcon = ({ size = 24, className = "", strokeWidth = 2, color 
         <line x1="22" x2="16" y1="9" y2="15"/>
         <line x1="16" x2="22" y1="9" y2="15"/>
     </svg>
+);
+
+
+export const EyeIcon = ({ size = 24, className = '', ...props }) => (
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    className={className}
+    {...props}
+  >
+    <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
+    <circle cx="12" cy="12" r="3" />
+  </svg>
+);
+
+
+export const EyeOffIcon = ({ size = 24, className = '', ...props }) => (
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    className={className}
+    {...props}
+  >
+    <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-10-7-10-7a1.89 1.89 0 0 1 .29-1.28M22 12s-3 7-10 7a9.77 9.77 0 0 1-5.16-1.56M2 2l20 20" />
+    <path d="M9.9 4.24A6.82 6.82 0 0 1 12 4c7 0 10 7 10 7a1.89 1.89 0 0 1-3.61 1.28" />
+    <line x1="12" x2="12" y1="9" y2="15" />
+    <line x1="9" x2="15" y1="12" y2="12" />
+    <circle cx="12" cy="12" r="3" />
+  </svg>
 );

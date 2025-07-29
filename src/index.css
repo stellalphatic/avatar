@@ -79,3 +79,51 @@ html {
   background-color: rgba(255, 255, 255, 0.05);
   border: 1px solid rgba(255, 255, 255, 0.1);
 }
+
+.auth-card-glow {
+  position: relative;
+  overflow: hidden; /* Important to contain the pseudo-elements */
+}
+
+
+/* Pseudo-element for the animated border/glow effect */
+.auth-card-glow::before {
+  content: '';
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: conic-gradient(from 0deg at 50% 50%,
+    rgba(255, 0, 255, 0) 0%, /* Transparent */
+    rgba(255, 0, 255, 0.3) 15%, /* Pinkish glow */
+    rgba(138, 43, 226, 0.3) 30%, /* Purple glow */
+    rgba(138, 43, 226, 0) 50%,  /* Transparent */
+    rgba(255, 0, 255, 0) 65%,
+    rgba(255, 0, 255, 0.3) 80%,
+    rgba(138, 43, 226, 0.3) 95%,
+    rgba(138, 43, 226, 0) 100%
+  );
+  animation: rotateGlow 8s linear infinite;
+  transform-origin: 0% 0%; /* Rotate around top-left corner */
+  z-index: -1; /* Behind the card content */
+  filter: blur(20px); /* Soften the glow */
+}
+
+/* Rotate animation for the glow effect */
+@keyframes rotateGlow {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+
+
+/* Ensure foreground elements are on top */
+.bg-card > * {
+  position: relative;
+  z-index: 1;
+}
