@@ -1,20 +1,19 @@
-// src/components/PricingModal.jsx 
+// src/components/PricingModal.jsx
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { useAuth } from '../contexts/AuthContext';
-
-import { XIcon, CheckIcon } from '../utils/icons';
+import { XIcon, CheckIcon } from '../utils/icons'; // Assuming these are defined as actual React components
 
 export const PricingModal = ({ onClose }) => {
     const { user, supabase } = useAuth();
-    const [isYearlyBilling, setIsYearlyBilling] = useState(false); 
+    const [isYearlyBilling, setIsYearlyBilling] = useState(false);
 
     const subscriptionPlans = [
         {
             title: "Creator",
-            description: "For one person", 
+            description: "For one person",
             monthlyPrice: "$24",
-            yearlyPrice: "$20", // $24 * 12 * (1 - 0.22) / 12 = ~ $20
+            yearlyPrice: "$20",
             features: [
                 "Unlimited videos",
                 "Videos up to 30-mins",
@@ -31,14 +30,14 @@ export const PricingModal = ({ onClose }) => {
         {
             title: "Team",
             description: "For you and your team",
-            monthlyPrice: "$120", // Example pricing
+            monthlyPrice: "$120",
             yearlyPrice: "$99",
-            minSeats: "Minimum 2 seats, $720 billed yearly", // Mimicking competitor
+            minSeats: "Minimum 2 seats, $720 billed yearly",
             features: [
                 "Everything in Creator, plus:",
                 "2 seats included",
                 "2 Custom Video Avatars",
-                "Unlimited videos", // Listed again for clarity on competitor's site
+                "Unlimited videos",
                 "Videos up to 30-mins",
                 "4k video export",
                 "Faster video processing"
@@ -50,7 +49,7 @@ export const PricingModal = ({ onClose }) => {
         {
             title: "Enterprise",
             description: "For your organization",
-            price: "Let's talk", // Custom for enterprise
+            price: "Let's talk",
             features: [
                 "Everything in Team, plus:",
                 "Custom integrations",
@@ -58,7 +57,7 @@ export const PricingModal = ({ onClose }) => {
                 "SLA & Uptime guarantees",
                 "No video duration max"
             ],
-            stripePriceId: null, // No direct Stripe checkout for enterprise
+            stripePriceId: null,
             isPopular: false
         }
     ];
@@ -70,7 +69,6 @@ export const PricingModal = ({ onClose }) => {
         }
         if (plan.title === "Enterprise") {
             alert('Please contact our sales team for Enterprise plans.');
-            // Implement a contact form or redirect to a contact page
             return;
         }
 
@@ -136,30 +134,34 @@ export const PricingModal = ({ onClose }) => {
 
     return (
         <motion.div
-            initial={{ opacity: 0, scale: 0.8 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.8 }}
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-70 backdrop-blur-sm"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-70 backdrop-blur-sm p-4 overflow-y-auto"
             onClick={onClose}
         >
             <motion.div
-                className="bg-card p-8 rounded-xl shadow-lg max-w-5xl w-full mx-4 relative border border-border"
+                initial={{ scale: 0.8 }}
+                animate={{ scale: 1 }}
+                exit={{ scale: 0.8 }}
+                transition={{ type: "spring", stiffness: 200, damping: 20 }}
+                className="bg-card p-5 sm:p-7 rounded-xl shadow-lg max-w-sm sm:max-w-xl md:max-w-3xl lg:max-w-4xl w-full relative border border-border my-6" // Adjusted max-width, padding, margin
                 onClick={e => e.stopPropagation()}
             >
-                <button onClick={onClose} className="absolute top-4 right-4 text-muted-foreground hover:text-foreground">
-                    <XIcon size={24} />
+                <button onClick={onClose} className="absolute top-3 right-3 text-muted-foreground hover:text-foreground z-50"> {/* Adjusted position */}
+                    <XIcon size={22} /> {/* Slightly smaller icon */}
                 </button>
-                <h2 className="text-3xl font-bold text-center text-foreground mb-4">Plans that fit your scale</h2>
-                <div className="flex justify-center mb-8">
-                    <div className="relative inline-flex items-center rounded-lg bg-gray-700 p-1">
+                <h2 className="text-xl sm:text-2xl font-bold text-center text-foreground mb-3 sm:mb-5">Plans that fit your scale</h2> {/* Reduced text size */}
+                <div className="flex justify-center mb-5 sm:mb-6"> {/* Reduced margin */}
+                    <div className="relative inline-flex items-center rounded-lg bg-gray-700 p-1 flex-wrap justify-center text-center">
                         <button
-                            className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${!isYearlyBilling ? 'bg-purple-600 text-white' : 'text-gray-300 hover:text-white'}`}
+                            className={`px-3 sm:px-4 py-1.5 rounded-md text-xs sm:text-sm font-medium transition-colors ${!isYearlyBilling ? 'bg-purple-600 text-white' : 'text-gray-300 hover:text-white'}`}
                             onClick={() => setIsYearlyBilling(false)}
                         >
                             Monthly billing
                         </button>
                         <button
-                            className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${isYearlyBilling ? 'bg-purple-600 text-white' : 'text-gray-300 hover:text-white'}`}
+                            className={`px-3 sm:px-4 py-1.5 rounded-md text-xs sm:text-sm font-medium transition-colors ${isYearlyBilling ? 'bg-purple-600 text-white' : 'text-gray-300 hover:text-white'}`}
                             onClick={() => setIsYearlyBilling(true)}
                         >
                             Yearly (save up to 22%)
@@ -167,42 +169,42 @@ export const PricingModal = ({ onClose }) => {
                     </div>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-5 sm:gap-7"> {/* Adjusted gap */}
                     {subscriptionPlans.map((plan, index) => (
                         <motion.div
                             key={index}
-                            className="p-6 border border-border rounded-xl bg-background flex flex-col items-center text-center relative"
-                            whileHover={{ scale: 1.03, boxShadow: "0 8px 20px rgba(0,0,0,0.2)" }}
-                            transition={{ type: "spring", stiffness: 300 }}
+                            className="p-4 sm:p-5 border border-border rounded-xl bg-background flex flex-col items-center text-center relative" // Adjusted padding
+                            whileHover={{ scale: 1.02, boxShadow: "0 6px 15px rgba(0,0,0,0.15)" }} // Adjusted shadow
+                            transition={{ type: "spring", stiffness: 250 }} // Softer spring
                         >
                             {plan.isPopular && (
-                                <div className="absolute -top-3 right-4 bg-gradient-to-r from-purple-500 to-pink-500 text-white text-xs font-bold px-3 py-1 rounded-full shadow-lg">
+                                <div className="absolute -top-3 right-3 bg-gradient-to-r from-purple-500 to-pink-500 text-white text-xs font-bold px-2.5 py-0.5 rounded-full shadow-lg"> {/* Adjusted padding */}
                                     Most Popular 🔥
                                 </div>
                             )}
-                            <h4 className="text-sm text-muted-foreground mb-1">{plan.description}</h4>
-                            <h3 className="text-2xl font-bold mb-2 bg-gradient-to-r from-purple-500 to-pink-500 bg-clip-text text-transparent">
+                            <h4 className="text-xs text-muted-foreground mb-1">{plan.description}</h4> {/* Reduced text size */}
+                            <h3 className="text-xl font-bold mb-2 bg-gradient-to-r from-purple-500 to-pink-500 bg-clip-text text-transparent"> {/* Reduced text size */}
                                 {plan.title}
                             </h3>
-                            <p className="text-4xl font-extrabold text-foreground mb-6">
+                            <p className="text-3xl font-extrabold text-foreground mb-4 sm:mb-5"> {/* Reduced text size */}
                                 {plan.title === "Enterprise"
                                     ? plan.price
                                     : (isYearlyBilling ? plan.yearlyPrice : plan.monthlyPrice) + "/month"}
                             </p>
                             {plan.minSeats && (
-                                <p className="text-xs text-muted-foreground mb-4">{plan.minSeats}</p>
+                                <p className="text-xs text-muted-foreground mb-3 sm:mb-4">{plan.minSeats}</p>
                             )}
-                            <ul className="text-left text-muted-foreground mb-6 space-y-2 flex-grow">
+                            <ul className="text-left text-muted-foreground mb-5 space-y-1.5 flex-grow text-sm"> {/* Reduced margin/space-y/text size */}
                                 {plan.features.map((feature, idx) => (
-                                    <li key={idx} className="flex items-center gap-2">
-                                        <CheckIcon className="w-4 h-4 text-green-500" /> {feature}
+                                    <li key={idx} className="flex items-start gap-1.5"> {/* Reduced gap */}
+                                        <CheckIcon className="w-3.5 h-3.5 text-green-500 mt-0.5 flex-shrink-0" /> {feature} {/* Reduced icon size */}
                                     </li>
                                 ))}
                             </ul>
                             <button
                                 onClick={() => handleCheckout(plan)}
-                                disabled={plan.title === "Free Plan"} // You might remove "Free Plan" if not offered explicitly
-                                className={`mt-auto px-6 py-3 rounded-lg font-semibold text-lg transition-all duration-200
+                                disabled={plan.title === "Free Plan"}
+                                className={`mt-auto w-full px-4 sm:px-5 py-2 rounded-lg font-semibold text-sm transition-all duration-200 // Reduced padding/font size
                                     ${plan.title === "Enterprise"
                                         ? "bg-transparent border border-purple-600 text-purple-500 hover:bg-purple-600 hover:text-white"
                                         : (plan.title === "Free Plan"

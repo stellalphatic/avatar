@@ -80,6 +80,8 @@ html {
   border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
+
+
 .auth-card-glow {
   position: relative;
   overflow: hidden; /* Important to contain the pseudo-elements */
@@ -126,4 +128,21 @@ html {
 .bg-card > * {
   position: relative;
   z-index: 1;
+}
+
+
+.glass-effect {
+  background-color: rgba(255, 255, 255, 0.05); /* Light transparent white for dark theme glass */
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+body.light {
+  background-color: #ffffff; /* Explicitly white for light mode */
+  color: #1f2937; /* Dark gray for text */
+}
+
+body.dark {
+  background-color: #0d0d0d; /* Your dark background color */
+  color: #e5e7eb; /* Light gray for text */
 }
