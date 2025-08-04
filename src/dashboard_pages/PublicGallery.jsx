@@ -18,7 +18,7 @@ const PublicGallery = () => {
     const [searchTerm, setSearchTerm] = useState('');
     const [addingAvatarId, setAddingAvatarId] = useState(null);
 
-    const backendRestUrl = import.meta.env.VITE_BACKEND_REST_URL || 'http://localhost:5000';
+    const backendRestUrl = import.meta.env.VITE_BACKEND_API_URL || 'http://localhost:5000';
 
     // --- Data Fetching for Public Avatars ---
     const fetchPublicCreations = useCallback(async () => {

@@ -31,7 +31,7 @@ const MyCreations = () => {
     const [deletingAvatarId, setDeletingAvatarId] = useState(null); // Stores ID of avatar to be deleted
 
     // backendRestUrl is no longer used for avatar CRUD operations directly
-    // const backendRestUrl = import.meta.env.VITE_BACKEND_REST_URL || 'http://localhost:5000';
+    // const backendRestUrl = import.meta.env.VITE_BACKEND_API_URL || 'http://localhost:5000';
 
     // --- Data Fetching ---
     const fetchMyCreations = useCallback(async () => {

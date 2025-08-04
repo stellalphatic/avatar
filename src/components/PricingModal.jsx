@@ -85,9 +85,9 @@ export const PricingModal = ({ onClose }) => {
                 return;
             }
 
-            const backendUrl = import.meta.env.VITE_BACKEND_REST_URL;
+            const backendUrl = import.meta.env.VITE_BACKEND_API_URL;
             if (!backendUrl) {
-                console.error('VITE_BACKEND_REST_URL is not defined in your .env file.');
+                console.error('VITE_BACKEND_API_URL is not defined in your .env file.');
                 alert('Backend URL is not configured. Please check your environment variables.');
                 return;
             }
