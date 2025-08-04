@@ -1,3 +1,4 @@
+// src/contexts/ThemeContext.jsx
 import React, { createContext, useContext, useEffect, useState } from 'react';
 
 const ThemeContext = createContext();
@@ -11,19 +12,19 @@ export const useTheme = () => {
 };
 
 export const ThemeProvider = ({ children }) => {
-  const [theme, setTheme] = useState('light');
+  const [theme, setThemeState] = useState('light'); // Renamed to setThemeState to avoid conflict with the function passed to value
 
   useEffect(() => {
     const savedTheme = localStorage.getItem('theme') || 'light';
-    setTheme(savedTheme);
+    setThemeState(savedTheme); // Use setThemeState here
     document.documentElement.classList.toggle('dark', savedTheme === 'dark');
   }, []);
 
-  const toggleTheme = () => {
-    const newTheme = theme === 'light' ? 'dark' : 'light';
-    setTheme(newTheme);
-    localStorage.setItem('theme', newTheme);
-    document.documentElement.classList.toggle('dark', newTheme === 'dark');
+  const toggleTheme = (newTheme) => { // Added newTheme parameter for direct setting
+    const finalTheme = newTheme || (theme === 'light' ? 'dark' : 'light');
+    setThemeState(finalTheme); // Use setThemeState here
+    localStorage.setItem('theme', finalTheme);
+    document.documentElement.classList.toggle('dark', finalTheme === 'dark');
   };
 
   return (

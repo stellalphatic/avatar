@@ -46,7 +46,7 @@ const Navbar = () => {
           {/* Logo / Brand */}
           <Link to="/" className="flex items-center space-x-2">
             <motion.img
-              src="/MetaPresence_Favicon.jpeg" // Path to your favicon in the public folder
+              src="/MetaPresence.png" // Path to your favicon in the public folder
               alt="MetaPresence Favicon"
               className="w-8 h-8 rounded-full shadow-lg"
               initial={{ rotate: 0 }}

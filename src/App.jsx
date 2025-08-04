@@ -1,26 +1,34 @@
-// src/App.jsx
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { AuthProvider } from './contexts/AuthContext';
 import Home from './components/Home';
-import Dashboard from './components/Dashboard'; // Main dashboard layout
+import Dashboard from './components/Dashboard';
 import AuthPage from './pages/AuthPage';
 import ForgotPasswordPage from './pages/ForgotPasswordPage';
 import UpdatePasswordPage from './pages/UpdatePasswordPage';
 import ProtectedRoute from './ProtectedRoute';
 
-// Dashboard Pages (existing and new)
+// Dashboard Pages
 import DashboardOverview from './dashboard_pages/DashboardOverview';
-import MyCreations from './dashboard_pages/MyCreations'; // Changed from MyAvatarsPage to MyCreations for consistency with your file
-import PublicGallery from './dashboard_pages/PublicGallery'; // Changed to PublicGallery
-import CreateAvatar from './dashboard_pages/CreateAvatar'; // Changed to CreateAvatar
-import SettingsPage from './dashboard_pages/SettingsPage'; // Added SettingsPage explicitly
+import MyCreations from './dashboard_pages/MyCreations';
+import PublicGallery from './dashboard_pages/PublicGallery';
+import CreateAvatar from './dashboard_pages/CreateAvatar';
+import SettingsPage from './dashboard_pages/SettingsPage'; // Updated SettingsPage
+import VoicesPage from './dashboard_pages/VoicesPage';
+import ChatWithAvatarPage from './dashboard_pages/ChatWithAvatarPage';
+import IntegrationsPage from './dashboard_pages/IntegrationsPage';
 
-import VoicesPage from './dashboard_pages/VoicesPage'; // NEW
-import ChatWithAvatarPage from './dashboard_pages/ChatWithAvatarPage'; // NEW
-import IntegrationsPage from './dashboard_pages/IntegrationsPage'; // NEW
-import PricingPage from './pages/PricingPage'; // NEW (optional, for direct /pricing route)
+// New/Updated top-level pages
+import PricingPage from './pages/PricingPage'; // Full-page pricing
+import PrivacyPolicyPage from './pages/PrivacyPolicyPage';
+import TermsConditionsPage from './pages/TermsConditionsPage';
+
+// Placeholder components for routes not yet fully implemented
+const ConversationLibraryPage = () => <div className="p-8 text-center text-xl dark:text-gray-200">Conversation Library Coming Soon!</div>;
+const VideoGenerationPage = () => <div className="p-8 text-center text-xl dark:text-gray-200">Video Generation Coming Soon!</div>;
+const VideoLibraryPage = () => <div className="p-8 text-center text-xl dark:text-gray-200">Video Library Coming Soon!</div>;
+
 
 function App() {
   return (
@@ -31,39 +39,43 @@ function App() {
             <Routes>
               <Route path="/" element={<Home />} />
               <Route path="/auth" element={<AuthPage />} />
-              <Route path="/auth/forgot-password" element={<ForgotPasswordPage />} /> 
-              <Route path="/auth/update-password" element={<UpdatePasswordPage />} /> 
-              {/* Optional: Direct pricing page route */}
-              <Route path="/pricing" element={<PricingPage />} />
+              <Route path="/auth/forgot-password" element={<ForgotPasswordPage />} />
+              <Route path="/auth/update-password" element={<UpdatePasswordPage />} />
+              
+              {/* Top-level routes */}
+              <Route path="/pricing" element={<PricingPage />} /> {/* Dedicated Pricing Page */}
+              <Route path="/privacy-policy" element={<PrivacyPolicyPage />} />
+              <Route path="/terms-conditions" element={<TermsConditionsPage />} />
 
               {/* Protected Dashboard Route with Nested Routes */}
               <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>}>
-                {/* Default dashboard view */}
                 <Route index element={<DashboardOverview />} />
-                {/* Avatars Routes */}
-                <Route path="avatars/my" element={<MyCreations />} />
-                <Route path="avatars/public" element={<PublicGallery />} />
-                <Route path="avatars/create" element={<CreateAvatar />} />
-                {/* Voices Route */}
-                <Route path="voices" element={<VoicesPage />} />
-                {/* Chat Route */}
+                {/* Conversation Routes */}
                 <Route path="chat" element={<ChatWithAvatarPage />} />
-                {/* Integrations Route */}
-                <Route path="integrations" element={<IntegrationsPage />} />
-                {/* Settings Route */}
-                <Route path="settings" element={<SettingsPage />} /> {/* Explicitly added SettingsPage route */}
-                {/* Add more routes here as needed */}
-                {/* Placeholder routes (disabled in sidebar for now) */}
-                <Route path="projects" element={<div>Projects Coming Soon!</div>} />
-                <Route path="templates" element={<div>Templates Coming Soon!</div>} />
-                <Route path="ai-voice" element={<div>AI Voice Tools Coming Soon!</div>} />
-                <Route path="brand" element={<div>Brand Kit Coming Soon!</div>} />
-                <Route path="uploads" element={<div>Manage Uploaded Media Coming Soon!</div>} />
-                <Route path="notifications" element={<div>Notifications Here!</div>} />
+                <Route path="conversation/library" element={<ConversationLibraryPage />} />
+                
+                {/* Avatar Routes */}
+                <Route path="avatars/create" element={<CreateAvatar />} />
+                <Route path="avatars/my" element={<MyCreations />} /> 
+                <Route path="avatars/public" element={<PublicGallery />} />
+                <Route path="voices" element={<VoicesPage />} /> 
 
+                {/* Video Routes */}
+                <Route path="video/generate" element={<VideoGenerationPage />} />
+                <Route path="video/library" element={<VideoLibraryPage />} />
+
+                {/* Integrations & Settings */}
+                <Route path="integrations" element={<IntegrationsPage />} /> 
+                <Route path="settings" element={<SettingsPage />} /> {/* Now includes billing info */}
+                
+                {/* Removed separate billing route as it's now part of settings */}
+                {/* <Route path="billing" element={<BillingPage />} /> */}
+                
+                {/* Catch-all for undefined dashboard sub-routes, redirects to dashboard home */}
+                <Route path="*" element={<Navigate to="/dashboard" replace />} />
               </Route>
 
-              {/* Catch-all for undefined routes */}
+              {/* Catch-all for undefined top-level routes, redirects to home */}
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </div>

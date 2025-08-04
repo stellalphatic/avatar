@@ -86,7 +86,7 @@ const Footer = () => {
             >
               <div className="flex items-center space-x-2 mb-6">
                 <img
-                  src="/MetaPresence_Favicon.jpeg"
+                  src="/MetaPresence.png"
                   alt="MetaPresence Favicon"
                   className="w-10 h-10 rounded-lg shadow-lg"
                 />
