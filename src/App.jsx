@@ -16,8 +16,13 @@ import PublicGallery from './dashboard_pages/PublicGallery';
 import CreateAvatar from './dashboard_pages/CreateAvatar';
 import SettingsPage from './dashboard_pages/SettingsPage'; // Updated SettingsPage
 import VoicesPage from './dashboard_pages/VoicesPage';
-import ChatWithAvatarPage from './dashboard_pages/ChatWithAvatarPage';
+import ChatWithAvatarPage from './dashboard_pages/ConversationStudio';
 import IntegrationsPage from './dashboard_pages/IntegrationsPage';
+
+import VideoGenerationPage from './dashboard_pages/VideoGeneration';
+import VideoLibraryPage from './dashboard_pages/VideoLibrary';
+import ConversationLibraryPage from './dashboard_pages/ConversationLibrary';
+
 
 // New/Updated top-level pages
 import PricingPage from './pages/PricingPage'; // Full-page pricing
@@ -25,9 +30,9 @@ import PrivacyPolicyPage from './pages/PrivacyPolicyPage';
 import TermsConditionsPage from './pages/TermsConditionsPage';
 
 // Placeholder components for routes not yet fully implemented
-const ConversationLibraryPage = () => <div className="p-8 text-center text-xl dark:text-gray-200">Conversation Library Coming Soon!</div>;
-const VideoGenerationPage = () => <div className="p-8 text-center text-xl dark:text-gray-200">Video Generation Coming Soon!</div>;
-const VideoLibraryPage = () => <div className="p-8 text-center text-xl dark:text-gray-200">Video Library Coming Soon!</div>;
+// const ConversationLibraryPage = () => <div className="p-8 text-center text-xl dark:text-gray-200">Conversation Library Coming Soon!</div>;
+// const VideoGenerationPage = () => <div className="p-8 text-center text-xl dark:text-gray-200">Video Generation Coming Soon!</div>;
+// const VideoLibraryPage = () => <div className="p-8 text-center text-xl dark:text-gray-200">Video Library Coming Soon!</div>;
 
 
 function App() {
@@ -66,10 +71,8 @@ function App() {
 
                 {/* Integrations & Settings */}
                 <Route path="integrations" element={<IntegrationsPage />} /> 
-                <Route path="settings" element={<SettingsPage />} /> {/* Now includes billing info */}
+                <Route path="settings" element={<SettingsPage />} /> 
                 
-                {/* Removed separate billing route as it's now part of settings */}
-                {/* <Route path="billing" element={<BillingPage />} /> */}
                 
                 {/* Catch-all for undefined dashboard sub-routes, redirects to dashboard home */}
                 <Route path="*" element={<Navigate to="/dashboard" replace />} />

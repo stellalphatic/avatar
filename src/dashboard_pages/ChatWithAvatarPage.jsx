@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { MessageCircleIcon, MicIcon, UsersIcon, SendIcon, Volume2Icon, VolumeXIcon, PhoneCall, Video, PhoneOff, VideoOff } from 'lucide-react';
+import { MessageCircleIcon, MicIcon, UsersIcon, SendIcon, Volume2Icon, VolumeXIcon, PhoneCall, Video, PhoneOff, VideoOff, Loader2, Bot } from 'lucide-react'; // Added Bot icon for the prompt modal
 
 let textChatWs = null; // WebSocket for text-only chat
 let voiceCallWs = null; // WebSocket for real-time voice (STT input, TTS audio output)
@@ -20,8 +20,10 @@ const ChatWithAvatarPage = () => {
     const [voiceCallWsConnected, setVoiceCallWsConnected] = useState(false); // State for voice call WS connection
     const [audioCallActive, setAudioCallActive] = useState(false); // New state: true if an active voice call is in progress
     const [selectedLanguage, setSelectedLanguage] = useState('en'); // NEW: State for selected language, default to English
+    const [showSystemPromptModal, setShowSystemPromptModal] = useState(false); // NEW: State for showing the system prompt modal
 
     const messagesEndRef = useRef(null);
+    const systemPromptModalRef = useRef(null);
 
     // --- Web Audio API Refs ---
     const audioContextRef = useRef(null);
@@ -50,13 +52,36 @@ const ChatWithAvatarPage = () => {
     const handleStopSpeakingRef = useRef(null);
     const handleVoiceInputToggleRef = useRef(null);
 
+    // Helper function to truncate text for display
+    const truncatePrompt = (text, limit) => {
+        if (!text) return 'No description available.';
+        return text.length > limit ? text.substring(0, limit) + '...' : text;
+    };
+
+    // Close modal if a click occurs outside of it
+    useEffect(() => {
+        const handleClickOutside = (event) => {
+            if (systemPromptModalRef.current && !systemPromptModalRef.current.contains(event.target)) {
+                setShowSystemPromptModal(false);
+            }
+        };
+        if (showSystemPromptModal) {
+            document.addEventListener('mousedown', handleClickOutside);
+        }
+        return () => {
+            document.removeEventListener('mousedown', handleClickOutside);
+        };
+    }, [showSystemPromptModal]);
+
+
     // --- Playback and STT functions using refs ---
     const playNextAudioChunk = useCallback(async () => {
         if (!audioContextRef.current || audioQueueRef.current.length === 0) {
             return;
         }
 
-        if (isSpeaking && currentSourceNodeRef.current) {
+        // Only proceed if not currently playing or if currentSourceNode has finished
+        if (isSpeaking && currentSourceNodeRef.current && audioContextRef.current.currentTime < nextPlayTimeRef.current) {
             return;
         }
 
@@ -503,7 +528,7 @@ const ChatWithAvatarPage = () => {
                 setVoiceCallWsConnected(false);
                 setAudioCallActive(false);
                 setError('Voice call ended.');
-                
+
                 if (currentSourceNodeRef.current) {
                     currentSourceNodeRef.current.stop();
                     currentSourceNodeRef.current.disconnect();
@@ -559,25 +584,36 @@ const ChatWithAvatarPage = () => {
     };
 
     return (
-        <div className="container mx-auto px-4 py-8 h-full flex flex-col lg:flex-row">
-            <h2 className="text-4xl font-bold text-foreground mb-8 lg:hidden">Chat with Avatar</h2>
+        <div className="flex flex-col lg:flex-row min-h-screen bg-background text-foreground p-4 sm:p-6 lg:p-8">
+            {/* Page Title for Mobile */}
+            <h2 className="text-3xl sm:text-4xl font-extrabold text-center mb-6 lg:hidden">
+                Chat with Avatar
+            </h2>
 
+            {/* Error Display */}
             {error && (
-                <div className="bg-red-500/20 text-red-400 p-4 rounded-lg mb-6 text-center lg:col-span-3">
+                <div className="bg-red-500/20 text-red-400 p-4 rounded-xl mb-6 text-center shadow-md border border-red-500">
                     {error}
                 </div>
             )}
 
-            <aside className="w-full lg:w-1/4 bg-card p-6 rounded-lg shadow border border-border mb-6 lg:mb-0 lg:mr-6 flex-shrink-0">
-                <h3 className="text-xl font-semibold text-foreground mb-4 flex items-center gap-2">
-                    <UsersIcon size={20} /> Your Avatars
+            {/* Main Content Area */}
+            <aside className="w-full lg:w-1/4 bg-card p-6 rounded-xl shadow-lg border border-border mb-6 lg:mb-0 lg:mr-8 flex-shrink-0 flex flex-col">
+                <h3 className="text-xl font-bold text-foreground mb-5 flex items-center gap-3">
+                    <UsersIcon size={22} className="text-primary" /> Your Avatars
                 </h3>
                 {loadingAvatars ? (
-                    <p className="text-muted-foreground text-center">Loading avatars...</p>
+                    <div className="flex flex-col items-center justify-center h-full min-h-[150px]">
+                        <Loader2 className="animate-spin text-primary mb-3" size={32} />
+                        <p className="text-muted-foreground">Loading avatars...</p>
+                    </div>
                 ) : avatars.length === 0 ? (
-                    <p className="text-muted-foreground text-center">No avatars found. Create one!</p>
+                    <div className="flex flex-col items-center justify-center h-full min-h-[150px] text-center">
+                        <p className="text-muted-foreground">No avatars found.</p>
+                        <p className="text-muted-foreground text-sm mt-1">Create one to start chatting!</p>
+                    </div>
                 ) : (
-                    <div className="space-y-3">
+                    <div className="space-y-4 overflow-y-auto custom-scrollbar flex-grow">
                         {avatars.map((avatar) => (
                             <button
                                 key={avatar.id}
@@ -586,17 +622,25 @@ const ChatWithAvatarPage = () => {
                                     if (audioCallActive) endVoiceCallWebSocket();
                                     if (isListening && handleVoiceInputToggleRef.current) handleVoiceInputToggleRef.current(); // Call via ref
                                     if (isSpeaking && handleStopSpeakingRef.current) handleStopSpeakingRef.current(); // Call via ref
-                                    setMessages([]);
+                                    setMessages([]); // Clear messages on avatar change
                                 }}
-                                className={`w-full text-left p-3 rounded-lg flex items-center gap-3 transition-colors
-                                    ${selectedAvatar?.id === avatar.id ? 'bg-primary/20 text-primary font-semibold' : 'bg-input text-muted-foreground hover:bg-accent'}`}
+                                className={`w-full text-left p-4 rounded-lg flex items-center gap-4 transition-all duration-200 ease-in-out transform
+                                    ${selectedAvatar?.id === avatar.id
+                                        ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white shadow-md scale-[1.02] border border-purple-400'
+                                        : 'bg-background-light text-foreground hover:bg-accent hover:shadow-sm border border-border'
+                                    }
+                                    focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 focus:ring-offset-card
+                                `}
                             >
-                                <img src={avatar.image_url || "https://placehold.co/40x40/cccccc/ffffff?text=AV"} alt={avatar.name} className="w-10 h-10 rounded-full object-cover" />
-                                <div>
-                                    <p className="text-sm font-medium">{avatar.name}</p>
-                                    <p className="text-xs text-muted-foreground">
-                                        {avatar.system_prompt ? avatar.system_prompt.substring(0, 30) + '...' :
-                                         (avatar.persona_role ? avatar.persona_role.substring(0, 30) + '...' : 'No description')}
+                                <img
+                                    src={avatar.image_url || "https://placehold.co/50x50/7e22ce/ffffff?text=AV"}
+                                    alt={avatar.name}
+                                    className="w-12 h-12 rounded-full object-cover border-2 border-white/50 shadow-sm"
+                                />
+                                <div className="flex-1">
+                                    <p className={`text-base font-medium ${selectedAvatar?.id === avatar.id ? 'text-white' : 'text-foreground'}`}>{avatar.name}</p>
+                                    <p className={`text-xs ${selectedAvatar?.id === avatar.id ? 'text-purple-100' : 'text-muted-foreground'}`}>
+                                        {truncatePrompt(avatar.system_prompt || avatar.persona_role, 40)}
                                     </p>
                                 </div>
                             </button>
@@ -605,18 +649,24 @@ const ChatWithAvatarPage = () => {
                 )}
             </aside>
 
-            <section className="flex-1 bg-card p-6 rounded-lg shadow border border-border flex flex-col h-[calc(100vh-16rem)] lg:h-[calc(100vh-8rem)]">
+            <section className="flex-1 bg-card p-6 rounded-xl shadow-lg border border-border flex flex-col h-[calc(100vh-16rem)] sm:h-[calc(100vh-12rem)] lg:h-[calc(100vh-8rem)]">
                 {selectedAvatar ? (
                     <>
+                        {/* Chat Header */}
                         <div className="flex items-center gap-4 mb-6 pb-4 border-b border-border">
-                            <img src={selectedAvatar.image_url || "https://placehold.co/60x60/cccccc/ffffff?text=AV"} alt={selectedAvatar.name} className="w-12 h-12 rounded-full object-cover" />
-                            <div>
+                            <img
+                                src={selectedAvatar.image_url || "https://placehold.co/60x60/7e22ce/ffffff?text=AV"}
+                                alt={selectedAvatar.name}
+                                className="w-14 h-14 rounded-full object-cover border-2 border-primary/50 shadow-md"
+                                onClick={() => setShowSystemPromptModal(true)} // Click image to open modal
+                            />
+                            <div className="flex-1 cursor-pointer" onClick={() => setShowSystemPromptModal(true)}>
                                 <h3 className="text-2xl font-bold text-foreground">{selectedAvatar.name}</h3>
-                                <p className="text-muted-foreground text-sm">
-                                    {selectedAvatar.system_prompt || selectedAvatar.persona_role || 'No detailed description available.'}
+                                <p className="text-muted-foreground text-sm hover:underline">
+                                    {truncatePrompt(selectedAvatar.system_prompt || selectedAvatar.persona_role, 70)}
                                 </p>
                             </div>
-                            <div className="ml-auto flex gap-2">
+                            <div className="ml-auto flex flex-wrap justify-end gap-3"> {/* Use flex-wrap for responsiveness */}
                                 {/* Language Selector */}
                                 <select
                                     value={selectedLanguage}
@@ -624,10 +674,11 @@ const ChatWithAvatarPage = () => {
                                         setSelectedLanguage(e.target.value);
                                         if (audioCallActive) {
                                             endVoiceCallWebSocket();
-                                            setTimeout(() => startVoiceCallWebSocket(), 500);
+                                            setTimeout(() => startVoiceCallWebSocket(), 500); // Reconnect voice call with new language
                                         }
                                     }}
-                                    className="p-2 rounded-lg bg-input text-foreground border border-border"
+                                    className="p-2 rounded-lg bg-input text-foreground border border-border focus:ring-2 focus:ring-purple-500 outline-none
+                                               hover:bg-accent transition-colors text-sm sm:text-base"
                                     title="Select Language"
                                 >
                                     {SUPPORTED_CHAT_LANGUAGES.map(lang => (
@@ -638,7 +689,8 @@ const ChatWithAvatarPage = () => {
                                 {/* Voice Input Toggle (for Voice Messages in Text Chat OR Voice Call Input) */}
                                 <button
                                     onClick={() => handleVoiceInputToggleRef.current()} // Call via ref
-                                    className={`p-2 rounded-full transition-colors ${isListening ? 'bg-red-500 text-white' : 'bg-input text-muted-foreground hover:bg-accent'}`}
+                                    className={`p-3 rounded-full transition-all duration-200 ease-in-out transform hover:scale-105 active:scale-95 shadow-md
+                                        ${isListening ? 'bg-red-500 text-white animate-pulse' : 'bg-background-light text-muted-foreground hover:bg-accent'}`}
                                     title={isListening ? "Stop Voice Input" : "Start Voice Input"}
                                     disabled={!selectedAvatar || (!textChatWsConnected && !voiceCallWsConnected)}
                                 >
@@ -648,7 +700,8 @@ const ChatWithAvatarPage = () => {
                                 <button
                                     onClick={() => handleStopSpeakingRef.current()} // Call via ref
                                     disabled={!isSpeaking}
-                                    className={`p-2 rounded-full transition-colors ${isSpeaking ? 'bg-blue-500 text-white' : 'bg-input text-muted-foreground opacity-50 cursor-not-allowed'}`}
+                                    className={`p-3 rounded-full transition-all duration-200 ease-in-out transform hover:scale-105 active:scale-95 shadow-md
+                                        ${isSpeaking ? 'bg-blue-500 text-white' : 'bg-background-light text-muted-foreground opacity-50 cursor-not-allowed'}`}
                                     title="Stop Avatar Speaking"
                                 >
                                     <VolumeXIcon size={20} />
@@ -656,7 +709,8 @@ const ChatWithAvatarPage = () => {
                                 {/* Audio Call Button (connects/disconnects /voice-chat) */}
                                 <button
                                     onClick={() => audioCallActive ? endVoiceCallWebSocket() : startVoiceCallWebSocket()}
-                                    className={`p-2 rounded-full transition-colors ${audioCallActive ? 'bg-red-500 text-white' : 'bg-input text-muted-foreground hover:bg-accent'}`}
+                                    className={`p-3 rounded-full transition-all duration-200 ease-in-out transform hover:scale-105 active:scale-95 shadow-md
+                                        ${audioCallActive ? 'bg-gradient-to-r from-red-500 to-orange-500 text-white' : 'bg-background-light text-muted-foreground hover:bg-accent'}`}
                                     title={audioCallActive ? "End Voice Call" : "Start Voice Call"}
                                     disabled={!selectedAvatar || !user}
                                 >
@@ -665,7 +719,8 @@ const ChatWithAvatarPage = () => {
                                 {/* Video Call Button (Still a placeholder) */}
                                 <button
                                     onClick={() => { /* Handle video call start/end */ alert("Video call not implemented yet!"); }}
-                                    className={`p-2 rounded-full transition-colors bg-input text-muted-foreground hover:bg-accent opacity-50 cursor-not-allowed`}
+                                    className={`p-3 rounded-full transition-all duration-200 ease-in-out transform shadow-md
+                                        bg-background-light text-muted-foreground opacity-50 cursor-not-allowed`}
                                     title="Video Call (Not Implemented)"
                                     disabled={true}
                                 >
@@ -674,17 +729,19 @@ const ChatWithAvatarPage = () => {
                             </div>
                         </div>
 
-                        <div className="flex-1 overflow-y-auto space-y-4 pr-2 custom-scrollbar">
+                        {/* Chat Messages Area */}
+                        <div className="flex-1 overflow-y-auto space-y-4 pr-2 custom-scrollbar pb-4">
                             {messages.map((msg, index) => (
                                 <div
                                     key={index}
                                     className={`flex ${msg.type === 'user' ? 'justify-end' : 'justify-start'}`}
                                 >
-                                    <div className={`p-3 rounded-lg max-w-[70%] ${
-                                        msg.type === 'user'
-                                            ? 'bg-purple-600 text-white rounded-br-none'
-                                            : 'bg-background-light text-foreground rounded-bl-none'
-                                    }`}>
+                                    <div className={`p-3 rounded-xl max-w-[80%] sm:max-w-[70%] shadow-md text-sm sm:text-base
+                                        ${msg.type === 'user'
+                                            ? 'bg-gradient-to-br from-purple-600 to-pink-600 text-white rounded-br-none'
+                                            : 'bg-background-light text-foreground rounded-bl-none border border-border'
+                                        }`}
+                                    >
                                         {msg.text}
                                     </div>
                                 </div>
@@ -692,41 +749,80 @@ const ChatWithAvatarPage = () => {
                             <div ref={messagesEndRef} />
                         </div>
 
+                        {/* Message Input Form */}
                         <form onSubmit={handleSendMessage} className="mt-6 flex gap-4">
                             <input
                                 type="text"
                                 value={inputMessage}
                                 onChange={(e) => setInputMessage(e.target.value)}
-                                placeholder="Type your message..."
-                                className="flex-grow p-3 rounded-lg bg-input border border-border focus:ring-2 focus:ring-purple-500 outline-none text-foreground"
+                                placeholder={audioCallActive ? "Voice call active..." : "Type your message..."}
+                                className="flex-grow p-3 rounded-xl bg-input border border-border focus:ring-2 focus:ring-purple-500 outline-none text-foreground
+                                           placeholder:text-muted-foreground transition-all duration-200"
                                 disabled={!textChatWsConnected || !selectedAvatar || audioCallActive}
                             />
                             <button
                                 type="submit"
-                                className="p-3 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-lg hover:from-purple-700 hover:to-pink-700 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                                className="p-3 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-xl hover:from-purple-700 hover:to-pink-700
+                                           transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed shadow-md"
                                 disabled={!inputMessage.trim() || !textChatWsConnected || !selectedAvatar || audioCallActive}
                             >
                                 <SendIcon size={20} />
                             </button>
                         </form>
                         {!textChatWsConnected && selectedAvatar && !audioCallActive && (
-                            <p className="text-red-400 text-sm mt-2 text-center">Not connected to text chat service. Ensure backend /chat endpoint is running.</p>
+                            <p className="text-red-400 text-xs sm:text-sm mt-2 text-center">Not connected to text chat service. Ensure backend /chat endpoint is running.</p>
                         )}
                         {audioCallActive && (
-                            <p className="text-green-500 text-sm mt-2 text-center">Voice call active. Text input is disabled.</p>
+                            <p className="text-green-500 text-xs sm:text-sm mt-2 text-center">Voice call active. Text input is disabled.</p>
                         )}
                     </>
                 ) : (
-                    <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
-                        <MessageCircleIcon size={64} className="mb-4 opacity-50" />
-                        <p className="text-xl">Select an avatar from the left to start chatting.</p>
-                        {loadingAvatars && <p className="mt-4">Loading your avatars...</p>}
-                        {avatars.length === 0 && !loadingAvatars && (
-                            <p className="mt-4">You don't have any avatars yet. Create one on the "Create New Avatar" page!</p>
+                    <div className="flex flex-col items-center justify-center h-full text-muted-foreground text-center p-4">
+                        <MessageCircleIcon size={80} className="mb-6 opacity-30" />
+                        <p className="text-xl font-semibold mb-2">Select an avatar to start chatting!</p>
+                        <p className="text-base">Choose an avatar from the left sidebar to begin your conversation.</p>
+                        {loadingAvatars && (
+                            <div className="mt-6 flex items-center gap-2 text-primary">
+                                <Loader2 className="animate-spin" size={20} />
+                                <p>Loading your avatars...</p>
+                            </div>
+                        )}
+                        {avatars.length === 0 && !loadingAvatars && user && (
+                            <p className="mt-4 text-base">You don't have any avatars yet. <span className="text-primary font-medium">Create one</span> to get started!</p>
+                        )}
+                        {!user && !loadingAvatars && (
+                            <p className="mt-4 text-base text-red-400">Please log in to view and chat with avatars.</p>
                         )}
                     </div>
                 )}
             </section>
+            
+            {/* Full System Prompt Modal */}
+            {showSystemPromptModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 backdrop-blur-sm bg-black/50">
+                    <div
+                        ref={systemPromptModalRef}
+                        className="bg-card rounded-2xl p-6 shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto relative transform transition-all duration-300 scale-100 border border-border"
+                    >
+                        <button
+                            onClick={() => setShowSystemPromptModal(false)}
+                            className="absolute top-3 right-3 p-2 rounded-full text-muted-foreground hover:bg-accent transition-colors"
+                            aria-label="Close"
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M18 6 6 18"></path>
+                                <path d="m6 6 12 12"></path>
+                            </svg>
+                        </button>
+                        <h3 className="text-xl font-bold mb-4 text-foreground flex items-center gap-2">
+                            <Bot size={22} /> System Prompt for {selectedAvatar.name}
+                        </h3>
+                        <pre className="whitespace-pre-wrap text-sm text-foreground bg-background p-4 rounded-xl border border-border">
+                            {selectedAvatar.system_prompt || 'No system prompt available.'}
+                        </pre>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };
