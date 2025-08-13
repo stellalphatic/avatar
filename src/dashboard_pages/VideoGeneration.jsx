@@ -1,5 +1,4 @@
 "use client"
-
 import { useState, useEffect, useRef } from "react"
 import { useAuth } from "../contexts/AuthContext"
 import { useTheme } from "../contexts/ThemeContext"
@@ -232,7 +231,6 @@ const VideoGeneration = () => {
     const fetchVideoOptions = async () => {
       try {
         const response = await fetch(`${import.meta.env.VITE_BACKEND_API_URL}/video-generation/options`)
-
         if (response.ok) {
           const result = await response.json()
           if (result.success) {
@@ -283,7 +281,6 @@ const VideoGeneration = () => {
   // Poll for video generation status
   useEffect(() => {
     let interval = null
-
     if (generationTaskId) {
       interval = setInterval(async () => {
         try {
@@ -303,7 +300,6 @@ const VideoGeneration = () => {
 
             if (response.ok) {
               const result = await response.json()
-
               if (result.success) {
                 if (result.data.status === "completed") {
                   setIsGenerating(false)
@@ -314,11 +310,9 @@ const VideoGeneration = () => {
                   setAudioDuration(0)
                   setPreviewVideo(result.data.video_url)
                   showMessage("Video generated successfully!", "success")
-
                   // Refresh recent videos and usage
                   fetchRecentVideos()
                   fetchUsageStats()
-
                   clearInterval(interval)
                 } else if (result.data.status === "failed") {
                   setIsGenerating(false)
@@ -389,7 +383,6 @@ const VideoGeneration = () => {
             )
             return
           }
-
           resolve()
         }
         audio.onerror = () => reject(new Error("Failed to load audio file"))
@@ -470,6 +463,7 @@ const VideoGeneration = () => {
       const requestBody = {
         avatarId: selectedAvatar.id,
         quality: quality,
+        inputType: inputTab, // Add inputType field
       }
 
       if (inputTab === "script") {
@@ -494,7 +488,6 @@ const VideoGeneration = () => {
       }
 
       const result = await response.json()
-
       if (result.success) {
         setGenerationTaskId(result.data.taskId)
         showMessage(
@@ -745,7 +738,6 @@ const VideoGeneration = () => {
                       <X size={16} />
                     </button>
                   </div>
-
                   {usage && audioDuration > usage.videoGeneration.remaining && (
                     <div className="mt-3 p-2 bg-red-100 dark:bg-red-900/20 border border-red-300 dark:border-red-700 rounded-lg">
                       <div className="flex items-center space-x-2">
@@ -756,14 +748,12 @@ const VideoGeneration = () => {
                       </div>
                     </div>
                   )}
-
                   <audio controls className="w-full mt-3">
                     <source src={audioFile} />
                     Your browser does not support the audio element.
                   </audio>
                 </div>
               )}
-
               <input
                 ref={audioInputRef}
                 type="file"
@@ -785,7 +775,6 @@ const VideoGeneration = () => {
             Quality Settings
             <ChevronDown className={`h-5 w-5 transition-transform ${additionalSettingsOpen ? "rotate-180" : ""}`} />
           </button>
-
           <AnimatePresence>
             {additionalSettingsOpen && (
               <motion.div
@@ -978,7 +967,6 @@ const VideoGeneration = () => {
               <Eye size={16} />
             </Link>
           </div>
-
           {recentVideos.length > 0 ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {recentVideos.map((video) => (
@@ -1018,7 +1006,6 @@ const VideoGeneration = () => {
                       </div>
                     </div>
                   )}
-
                   <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black to-transparent p-2 opacity-0 group-hover:opacity-100 transition-opacity">
                     <p className="text-white text-sm font-medium truncate">
                       {video.prompt?.substring(0, 30) || video.audio_filename?.substring(0, 30)}...
