@@ -1,46 +1,51 @@
-// src/components/Navbar.jsx
-import React, { useState } from 'react';
-import { motion } from 'framer-motion';
-import { Link, useNavigate } from 'react-router-dom'; // Import useNavigate
-import { Menu, X, Moon, Sun } from 'lucide-react'; // Import Moon and Sun icons
-import { useTheme } from '../contexts/ThemeContext';
-import { useAuth } from '../contexts/AuthContext'; // Import useAuth
+"use client"
+
+import { useState } from "react"
+import { motion } from "framer-motion"
+import { Link, useNavigate } from "react-router-dom" // Import useNavigate
+import { Menu, X, Moon, Sun } from "lucide-react" // Import Moon and Sun icons
+import { useTheme } from "../contexts/ThemeContext"
+import { useAuth } from "../contexts/AuthContext" // Import useAuth
 
 const Navbar = () => {
-  const [isOpen, setIsOpen] = useState(false);
-  const { theme, toggleTheme } = useTheme();
-  const { user, signOut } = useAuth(); // Get user and signOut from AuthContext
-  const navigate = useNavigate(); // Initialize useNavigate
+  const [isOpen, setIsOpen] = useState(false)
+  const { theme, toggleTheme } = useTheme()
+  const { user, signOut } = useAuth() // Get user and signOut from AuthContext
+  const navigate = useNavigate() // Initialize useNavigate
 
   // Function to handle scrolling to sections
   const handleScrollToSection = (id) => {
-    const element = document.getElementById(id);
+    const element = document.getElementById(id)
     if (element) {
-      element.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      setIsOpen(false); // Close mobile menu after clicking a link
+      element.scrollIntoView({ behavior: "smooth", block: "start" })
+      setIsOpen(false) // Close mobile menu after clicking a link
     }
-  };
+  }
 
   // Original nav links, now using 'id' for scroll-to-section
   const navLinks = [
-    { name: 'About', id: 'about' },
-    { name: 'Pricing', id: 'pricing' },
-    { name: 'API Docs', href: '/api-docs' },
-  ];
+    { name: "About", id: "about" },
+    { name: "Pricing", id: "pricing" },
+    { name: "API Docs", href: "/api-docs" },
+  ]
 
   const handleLogout = async () => {
-    const { error } = await signOut();
+    const { error } = await signOut()
     if (!error) {
-      navigate('/'); // Redirect to home after logout
+      navigate("/") // Redirect to home after logout
     } else {
-      console.error('Logout error:', error.message);
+      console.error("Logout error:", error.message)
     }
-  };
+  }
 
   return (
-    <nav className={`fixed w-full z-50 transition-colors duration-300 ${
-        theme === 'light' ? 'bg-white/80 backdrop-blur-md border-b border-gray-200' : 'bg-background/80 backdrop-blur-md border-b border-border'
-    }`}>
+    <nav
+      className={`fixed w-full z-50 transition-colors duration-300 ${
+        theme === "light"
+          ? "bg-white/80 backdrop-blur-md border-b border-gray-200"
+          : "bg-background/80 backdrop-blur-md border-b border-border"
+      }`}
+    >
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-16">
           {/* Logo / Brand */}
@@ -51,7 +56,7 @@ const Navbar = () => {
               className="w-8 h-8 rounded-full shadow-lg"
               initial={{ rotate: 0 }}
               animate={{ rotate: 360 }} // Subtle continuous rotation for brand
-              transition={{ repeat: Infinity, duration: 10, ease: "linear" }}
+              transition={{ repeat: Number.POSITIVE_INFINITY, duration: 10, ease: "linear" }}
             />
             <span className="text-2xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">
               METAPRESENCE
@@ -60,41 +65,45 @@ const Navbar = () => {
 
           {/* Desktop Navigation */}
           <div className="hidden md:flex items-center space-x-6">
-            {navLinks.map((link) => (
+            {navLinks.map((link) =>
               link.id ? ( // If it has an ID, it's an internal scroll link
                 <motion.button
                   key={link.name}
                   onClick={() => handleScrollToSection(link.id)}
                   className={`text-sm font-medium transition-colors duration-200 ${
-                    theme === 'light' ? 'text-gray-600 hover:text-purple-600' : 'text-muted-foreground hover:text-foreground'
+                    theme === "light"
+                      ? "text-gray-600 hover:text-purple-600"
+                      : "text-muted-foreground hover:text-foreground"
                   }`}
                   whileHover={{ y: -2 }}
                 >
                   {link.name}
-                </motion.button>
-              ) : ( // Otherwise, it's an external link
+                </motion.button> // Otherwise, it's an external link
+              ) : (
                 <motion.a
                   key={link.name}
                   href={link.href}
                   className={`text-sm font-medium transition-colors duration-200 ${
-                    theme === 'light' ? 'text-gray-600 hover:text-purple-600' : 'text-muted-foreground hover:text-foreground'
+                    theme === "light"
+                      ? "text-gray-600 hover:text-purple-600"
+                      : "text-muted-foreground hover:text-foreground"
                   }`}
                   whileHover={{ y: -2 }}
                 >
                   {link.name}
                 </motion.a>
-              )
-            ))}
+              ),
+            )}
 
             {/* Theme Toggle */}
             <motion.button
-              onClick={toggleTheme}
+              onClick={() => toggleTheme(theme === "light" ? "dark" : "light")}
               className="p-2 rounded-full bg-transparent hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
               aria-label="Toggle theme"
               whileHover={{ scale: 1.1 }}
               whileTap={{ scale: 0.9 }}
             >
-              {theme === 'light' ? <Moon size={20} /> : <Sun size={20} />} {/* Reverted to Lucide icons */}
+              {theme === "light" ? <Moon size={20} /> : <Sun size={20} />} {/* Reverted to Lucide icons */}
             </motion.button>
 
             {/* Conditional Auth Buttons */}
@@ -103,7 +112,9 @@ const Navbar = () => {
                 <Link
                   to="/dashboard"
                   className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors duration-200 ${
-                    theme === 'light' ? 'text-purple-600 hover:text-purple-700' : 'text-purple-400 hover:text-purple-300'
+                    theme === "light"
+                      ? "text-purple-600 hover:text-purple-700"
+                      : "text-purple-400 hover:text-purple-300"
                   }`}
                 >
                   Dashboard
@@ -122,7 +133,9 @@ const Navbar = () => {
                 <Link
                   to="/auth"
                   className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors duration-200 ${
-                    theme === 'light' ? 'text-purple-600 hover:text-purple-700' : 'text-purple-400 hover:text-purple-300'
+                    theme === "light"
+                      ? "text-purple-600 hover:text-purple-700"
+                      : "text-purple-400 hover:text-purple-300"
                   }`}
                 >
                   Log In
@@ -140,18 +153,18 @@ const Navbar = () => {
           {/* Mobile Toggle Button */}
           <div className="flex md:hidden items-center">
             <motion.button
-              onClick={toggleTheme}
+              onClick={() => toggleTheme(theme === "light" ? "dark" : "light")}
               className="p-2 rounded-full bg-transparent hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors mr-2"
               aria-label="Toggle theme"
               whileHover={{ scale: 1.1 }}
               whileTap={{ scale: 0.9 }}
             >
-              {theme === 'light' ? <Moon size={20} /> : <Sun size={20} />} {/* Reverted to Lucide icons */}
+              {theme === "light" ? <Moon size={20} /> : <Sun size={20} />} {/* Reverted to Lucide icons */}
             </motion.button>
             <button
               onClick={() => setIsOpen(!isOpen)}
               className={`inline-flex items-center justify-center p-2 rounded-md ${
-                theme === 'light' ? 'text-gray-700 hover:bg-gray-100' : 'text-gray-400 hover:bg-gray-700'
+                theme === "light" ? "text-gray-700 hover:bg-gray-100" : "text-gray-400 hover:bg-gray-700"
               } focus:outline-none focus:ring-2 focus:ring-inset focus:ring-purple-500`}
               aria-expanded="false"
             >
@@ -168,19 +181,19 @@ const Navbar = () => {
         animate={isOpen ? "open" : "closed"}
         variants={{
           open: { opacity: 1, height: "auto" },
-          closed: { opacity: 0, height: 0 }
+          closed: { opacity: 0, height: 0 },
         }}
         transition={{ duration: 0.3 }}
-        className={`md:hidden ${isOpen ? 'block' : 'hidden'} ${theme === 'light' ? 'bg-white border-t border-gray-200' : 'bg-card border-t border-border'}`}
+        className={`md:hidden ${isOpen ? "block" : "hidden"} ${theme === "light" ? "bg-white border-t border-gray-200" : "bg-card border-t border-border"}`}
       >
         <div className="px-2 pt-2 pb-3 space-y-1 sm:px-3">
-          {navLinks.map((link) => (
+          {navLinks.map((link) =>
             link.id ? (
               <button
                 key={link.name}
                 onClick={() => handleScrollToSection(link.id)}
                 className={`block px-3 py-2 rounded-md text-base font-medium text-left ${
-                  theme === 'light' ? 'text-gray-700 hover:bg-gray-100' : 'text-muted-foreground hover:bg-muted'
+                  theme === "light" ? "text-gray-700 hover:bg-gray-100" : "text-muted-foreground hover:bg-muted"
                 }`}
               >
                 {link.name}
@@ -190,20 +203,20 @@ const Navbar = () => {
                 key={link.name}
                 to={link.href}
                 className={`block px-3 py-2 rounded-md text-base font-medium text-left ${
-                  theme === 'light' ? 'text-gray-700 hover:bg-gray-100' : 'text-muted-foreground hover:bg-muted'
+                  theme === "light" ? "text-gray-700 hover:bg-gray-100" : "text-muted-foreground hover:bg-muted"
                 }`}
                 onClick={() => setIsOpen(false)}
               >
                 {link.name}
               </Link>
-            )
-          ))}
+            ),
+          )}
           {user ? (
             <>
               <Link
                 to="/dashboard"
                 className={`block w-full text-center px-3 py-2 rounded-md text-base font-medium ${
-                  theme === 'light' ? 'text-purple-600 hover:bg-gray-100' : 'text-purple-400 hover:bg-muted'
+                  theme === "light" ? "text-purple-600 hover:bg-gray-100" : "text-purple-400 hover:bg-muted"
                 }`}
                 onClick={() => setIsOpen(false)}
               >
@@ -221,7 +234,7 @@ const Navbar = () => {
               <Link
                 to="/auth"
                 className={`block w-full text-center px-3 py-2 rounded-md text-base font-medium ${
-                  theme === 'light' ? 'text-purple-600 hover:bg-gray-100' : 'text-purple-400 hover:bg-muted'
+                  theme === "light" ? "text-purple-600 hover:bg-gray-100" : "text-purple-400 hover:bg-muted"
                 }`}
                 onClick={() => setIsOpen(false)}
               >
@@ -239,7 +252,7 @@ const Navbar = () => {
         </div>
       </motion.div>
     </nav>
-  );
-};
+  )
+}
 
-export default Navbar;
+export default Navbar
