@@ -158,13 +158,14 @@ const ConversationStudio = () => {
   // Refs
   const videoRef = useRef(null)
   const audioContextRef = useRef(null)
-  const audioSourceRef = useRef(null) // Current playing audio source
+  const audioQueueRef = useRef([]) // Audio queue like your old code
+  const currentSourceNodeRef = useRef(null)
+  const nextPlayTimeRef = useRef(0)
   const callTimerRef = useRef(null)
   const conversationStartTimeRef = useRef(null)
   const recognitionRestartTimeoutRef = useRef(null)
   const inactivityTimeoutRef = useRef(null)
   const lastUserActivityRef = useRef(Date.now())
-  const audioChunksRef = useRef([]) // Store audio chunks for processing
 
   // Fetch avatars and usage
   useEffect(() => {
@@ -243,6 +244,108 @@ const ConversationStudio = () => {
     }
   }, [isConnected])
 
+  // Audio context initialization (like your old code)
+  useEffect(() => {
+    if (isConnected && !audioContextRef.current) {
+      try {
+        audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)()
+        console.log("AudioContext initialized.")
+        nextPlayTimeRef.current = audioContextRef.current.currentTime
+      } catch (e) {
+        console.error("Error initializing AudioContext:", e)
+        setError("Audio playback not supported or blocked by browser.")
+      }
+    }
+
+    return () => {
+      if (audioContextRef.current) {
+        console.log("Closing AudioContext.")
+        audioContextRef.current
+          .close()
+          .then(() => {
+            audioContextRef.current = null
+          })
+          .catch((e) => console.error("Error closing AudioContext:", e))
+      }
+      audioQueueRef.current = []
+      nextPlayTimeRef.current = 0
+      if (currentSourceNodeRef.current) {
+        currentSourceNodeRef.current.stop()
+        currentSourceNodeRef.current.disconnect()
+        currentSourceNodeRef.current = null
+      }
+    }
+  }, [isConnected])
+
+  // Audio playback function (based on your old code)
+  const playNextAudioChunk = async () => {
+    if (!audioContextRef.current || audioQueueRef.current.length === 0) {
+      return
+    }
+
+    // Only proceed if not currently playing or if currentSourceNode has finished
+    if (isSpeaking && currentSourceNodeRef.current && audioContextRef.current.currentTime < nextPlayTimeRef.current) {
+      return
+    }
+
+    const audioChunk = audioQueueRef.current.shift()
+    try {
+      const audioBuffer = await audioContextRef.current.decodeAudioData(audioChunk)
+      const source = audioContextRef.current.createBufferSource()
+      source.buffer = audioBuffer
+      source.connect(audioContextRef.current.destination)
+
+      const currentTime = audioContextRef.current.currentTime
+      if (nextPlayTimeRef.current < currentTime) {
+        nextPlayTimeRef.current = currentTime
+      }
+
+      source.start(nextPlayTimeRef.current)
+      nextPlayTimeRef.current += audioBuffer.duration
+      currentSourceNodeRef.current = source
+
+      setIsSpeaking(true)
+
+      // Pause user mic if avatar starts speaking
+      if (isListening && recognition) {
+        console.log("Avatar is speaking, pausing user microphone.")
+        recognition.stop()
+        setIsListening(false)
+      }
+
+      source.onended = () => {
+        currentSourceNodeRef.current = null
+        if (audioQueueRef.current.length > 0) {
+          playNextAudioChunk()
+        } else {
+          console.log("Avatar finished speaking all queued audio.")
+          setIsSpeaking(false)
+          // Re-enable microphone if in an active call and not already listening
+          if (isConnected && !isListening && recognition) {
+            console.log("Re-enabling microphone for user input after avatar spoke.")
+            startSpeechRecognition()
+          }
+        }
+      }
+    } catch (e) {
+      console.error("Error decoding or playing audio chunk:", e)
+      setError("Error playing avatar's voice. Please try again.")
+      setIsSpeaking(false)
+      audioQueueRef.current = []
+      nextPlayTimeRef.current = audioContextRef.current.currentTime
+      if (isConnected && !isListening && recognition) {
+        startSpeechRecognition()
+      }
+    }
+  }
+
+  // Effect to trigger playback when queue changes (like your old code)
+  useEffect(() => {
+    if (!isSpeaking && audioQueueRef.current.length > 0) {
+      playNextAudioChunk()
+    }
+  }, [audioQueueRef.current.length, isSpeaking])
+
   // Inactivity timeout - auto-stop after 60 seconds of no user activity
   useEffect(() => {
     if (isConnected) {
@@ -281,54 +384,6 @@ const ConversationStudio = () => {
   const canStartConversation = () => {
     if (!usage) return true
     return usage.conversation.remaining >= duration
-  }
-
-  // Initialize audio context
-  const initializeAudioContext = () => {
-    if (!audioContextRef.current) {
-      audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)()
-    }
-
-    // Resume audio context if suspended
-    if (audioContextRef.current.state === "suspended") {
-      audioContextRef.current.resume()
-    }
-  }
-
-  // Play audio chunk - FIXED to prevent repetition
-  const playAudioChunk = async (audioData) => {
-    try {
-      if (!audioContextRef.current) {
-        initializeAudioContext()
-      }
-
-      // Stop any currently playing audio to prevent overlap
-      if (audioSourceRef.current) {
-        try {
-          audioSourceRef.current.stop()
-        } catch (e) {
-          // Ignore if already stopped
-        }
-        audioSourceRef.current = null
-      }
-
-      const audioBuffer = await audioContextRef.current.decodeAudioData(audioData.slice())
-      const source = audioContextRef.current.createBufferSource()
-      source.buffer = audioBuffer
-      source.connect(audioContextRef.current.destination)
-
-      // Track the current source
-      audioSourceRef.current = source
-
-      source.onended = () => {
-        audioSourceRef.current = null
-      }
-
-      source.start()
-    } catch (error) {
-      console.error("Error playing audio:", error)
-      audioSourceRef.current = null
-    }
   }
 
   // Start conversation
@@ -401,7 +456,7 @@ const ConversationStudio = () => {
     }
   }
 
-  // Handle voice message
+  // Handle voice message (based on your old code logic)
   const handleVoiceMessage = async (event) => {
     if (typeof event.data === "string") {
       const data = JSON.parse(event.data)
@@ -416,7 +471,6 @@ const ConversationStudio = () => {
           setIsConnecting(false)
           setConnectionStatus("")
           setMessages((prev) => [...prev, { type: "system", text: data.message }])
-          initializeAudioContext()
           startSpeechRecognition()
           break
         case "llm_response_text":
@@ -435,9 +489,12 @@ const ConversationStudio = () => {
           break
       }
     } else if (event.data instanceof ArrayBuffer) {
-      // Handle audio data - play immediately without queuing
+      // Handle audio data - add to queue like your old code
       if (event.data.byteLength > 0) {
-        playAudioChunk(event.data)
+        audioQueueRef.current.push(event.data)
+        if (!isSpeaking && audioQueueRef.current.length === 1) {
+          playNextAudioChunk()
+        }
       }
     }
   }
@@ -457,7 +514,6 @@ const ConversationStudio = () => {
           setIsConnecting(false)
           setConnectionStatus("")
           setMessages((prev) => [...prev, { type: "system", text: data.message }])
-          initializeAudioContext()
           startSpeechRecognition()
           break
         case "llm_response_text":
@@ -487,8 +543,11 @@ const ConversationStudio = () => {
         // Likely video frame (larger size)
         displayVideoFrame(event.data)
       } else if (event.data.byteLength > 0) {
-        // Likely audio data - play immediately
-        playAudioChunk(event.data)
+        // Likely audio data - add to queue like your old code
+        audioQueueRef.current.push(event.data)
+        if (!isSpeaking && audioQueueRef.current.length === 1) {
+          playNextAudioChunk()
+        }
       }
     }
   }
@@ -519,7 +578,7 @@ const ConversationStudio = () => {
     }
   }
 
-  // Start speech recognition
+  // Start speech recognition (based on your old code)
   const startSpeechRecognition = () => {
     if (!("webkitSpeechRecognition" in window)) {
       setError("Speech recognition not supported in this browser")
@@ -605,18 +664,18 @@ const ConversationStudio = () => {
     setIsSpeaking(false)
     setIsListening(false)
 
-    // Stop any playing audio
-    if (audioSourceRef.current) {
+    // Stop any playing audio (like your old code)
+    if (currentSourceNodeRef.current) {
       try {
-        audioSourceRef.current.stop()
+        currentSourceNodeRef.current.stop()
       } catch (e) {
         // Ignore if already stopped
       }
-      audioSourceRef.current = null
+      currentSourceNodeRef.current = null
     }
 
-    // Clear audio chunks
-    audioChunksRef.current = []
+    // Clear audio queue
+    audioQueueRef.current = []
 
     // Clear recognition restart timeout
     if (recognitionRestartTimeoutRef.current) {

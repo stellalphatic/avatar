@@ -20,6 +20,7 @@ import {
   Share2,
   MoreVertical,
   X,
+  AlertTriangle,
 } from "lucide-react"
 import { motion, AnimatePresence } from "framer-motion"
 
@@ -61,13 +62,20 @@ const VideoCard = ({ video, theme, onDelete, onView }) => {
     }
   }
 
+  const handleCardClick = () => {
+    if (video.video_url) {
+      onView(video)
+    }
+  }
+
   return (
     <motion.div
       layout
       initial={{ opacity: 0, scale: 0.9 }}
       animate={{ opacity: 1, scale: 1 }}
       exit={{ opacity: 0, scale: 0.9 }}
-      className={`relative ${theme === "dark" ? "bg-gray-800" : "bg-white"} rounded-xl overflow-hidden shadow-lg transition-all duration-300 hover:shadow-xl group`}
+      className={`relative ${theme === "dark" ? "bg-gray-800" : "bg-white"} rounded-xl overflow-hidden shadow-lg transition-all duration-300 hover:shadow-xl group cursor-pointer`}
+      onClick={handleCardClick}
     >
       {/* Video Thumbnail/Player */}
       <div className="relative aspect-video">
@@ -83,16 +91,16 @@ const VideoCard = ({ video, theme, onDelete, onView }) => {
             />
             {!isPlaying && (
               <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-30 opacity-0 group-hover:opacity-100 transition-opacity">
-                <Play className="h-12 w-12 text-white bg-black bg-opacity-50 rounded-full p-3 cursor-pointer" />
+                <Play className="h-12 w-12 text-white bg-black bg-opacity-50 rounded-full p-3" />
               </div>
             )}
           </>
         ) : video.status === "failed" ? (
           <div
-            className={`w-full h-full ${theme === "dark" ? "bg-red-900" : "bg-red-100"} flex items-center justify-center`}
+            className={`w-full h-full ${theme === "dark" ? "bg-red-900/20" : "bg-red-100"} flex items-center justify-center`}
           >
             <div className="text-center">
-              <X className="h-8 w-8 text-red-500 mx-auto mb-2" />
+              <AlertTriangle className="h-8 w-8 text-red-500 mx-auto mb-2" />
               <p className={`text-sm ${theme === "dark" ? "text-red-400" : "text-red-600"}`}>Generation Failed</p>
             </div>
           </div>
@@ -126,7 +134,10 @@ const VideoCard = ({ video, theme, onDelete, onView }) => {
         <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
           <div className="relative">
             <button
-              onClick={() => setShowMenu(!showMenu)}
+              onClick={(e) => {
+                e.stopPropagation()
+                setShowMenu(!showMenu)
+              }}
               className="p-2 bg-black bg-opacity-50 rounded-full text-white hover:bg-opacity-70 transition-colors"
             >
               <MoreVertical size={16} />
@@ -142,7 +153,8 @@ const VideoCard = ({ video, theme, onDelete, onView }) => {
                 >
                   <div className="py-1">
                     <button
-                      onClick={() => {
+                      onClick={(e) => {
+                        e.stopPropagation()
                         onView(video)
                         setShowMenu(false)
                       }}
@@ -153,7 +165,8 @@ const VideoCard = ({ video, theme, onDelete, onView }) => {
                     </button>
                     {video.video_url && (
                       <button
-                        onClick={() => {
+                        onClick={(e) => {
+                          e.stopPropagation()
                           handleDownload()
                           setShowMenu(false)
                         }}
@@ -164,7 +177,8 @@ const VideoCard = ({ video, theme, onDelete, onView }) => {
                       </button>
                     )}
                     <button
-                      onClick={() => {
+                      onClick={(e) => {
+                        e.stopPropagation()
                         navigator.clipboard.writeText(video.video_url || "Processing...")
                         setShowMenu(false)
                       }}
@@ -174,7 +188,8 @@ const VideoCard = ({ video, theme, onDelete, onView }) => {
                       <span>Copy Link</span>
                     </button>
                     <button
-                      onClick={() => {
+                      onClick={(e) => {
+                        e.stopPropagation()
                         onDelete(video.id)
                         setShowMenu(false)
                       }}
@@ -242,12 +257,12 @@ const VideoLibrary = () => {
         const { data, error } = await supabase
           .from("video_generation_history")
           .select(`
-            *,
-            avatars (
-              name,
-              image_url
-            )
-          `)
+           *,
+           avatars (
+             name,
+             image_url
+           )
+         `)
           .eq("user_id", user.id)
           .order("created_at", { ascending: false })
 
@@ -294,7 +309,8 @@ const VideoLibrary = () => {
       const matchesFilter =
         filterStatus === "all" ||
         (filterStatus === "ready" && video.video_url) ||
-        (filterStatus === "processing" && !video.video_url)
+        (filterStatus === "processing" && !video.video_url && video.status !== "failed") ||
+        (filterStatus === "failed" && video.status === "failed")
 
       return matchesSearch && matchesFilter
     })
@@ -409,6 +425,7 @@ const VideoLibrary = () => {
               <option value="all">All Videos</option>
               <option value="ready">Ready</option>
               <option value="processing">Processing</option>
+              <option value="failed">Failed</option>
             </select>
           </div>
 
@@ -555,10 +572,18 @@ const VideoLibrary = () => {
                       </label>
                       <span
                         className={`px-2 py-1 rounded-full text-xs font-medium ${
-                          selectedVideo.video_url ? "bg-green-500 text-white" : "bg-yellow-500 text-white"
+                          selectedVideo.video_url
+                            ? "bg-green-500 text-white"
+                            : selectedVideo.status === "failed"
+                              ? "bg-red-500 text-white"
+                              : "bg-yellow-500 text-white"
                         }`}
                       >
-                        {selectedVideo.video_url ? "Ready" : "Processing"}
+                        {selectedVideo.video_url
+                          ? "Ready"
+                          : selectedVideo.status === "failed"
+                            ? "Failed"
+                            : "Processing"}
                       </span>
                     </div>
                   </div>

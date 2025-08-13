@@ -1,11 +1,25 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { useAuth } from "../contexts/AuthContext"
 import { useTheme } from "../contexts/ThemeContext"
 import supabase from "../supabaseClient"
 import { Link } from "react-router-dom"
-import { Video, ChevronDown, X, Search, UserPlus, Wand2, Loader2, Play, Eye, AlertTriangle } from "lucide-react"
+import {
+  Video,
+  ChevronDown,
+  X,
+  Search,
+  UserPlus,
+  Wand2,
+  Loader2,
+  Play,
+  Eye,
+  AlertTriangle,
+  Upload,
+  FileAudio,
+  Clock,
+} from "lucide-react"
 import { motion, AnimatePresence } from "framer-motion"
 
 const MAGIC_PHRASES = [
@@ -149,10 +163,14 @@ const VideoGeneration = () => {
   const { theme } = useTheme()
   const [inputTab, setInputTab] = useState("script")
   const [script, setScript] = useState("")
+  const [audioFile, setAudioFile] = useState(null)
+  const [audioFileName, setAudioFileName] = useState("")
+  const [audioDuration, setAudioDuration] = useState(0)
   const [selectedAvatar, setSelectedAvatar] = useState(null)
   const [avatars, setAvatars] = useState([])
   const [showAvatarModal, setShowAvatarModal] = useState(false)
   const [isGenerating, setIsGenerating] = useState(false)
+  const [generationTaskId, setGenerationTaskId] = useState(null)
   const [recentVideos, setRecentVideos] = useState([])
   const [message, setMessage] = useState("")
   const [messageType, setMessageType] = useState("info")
@@ -160,6 +178,9 @@ const VideoGeneration = () => {
   const [quality, setQuality] = useState("high")
   const [videoOptions, setVideoOptions] = useState(null)
   const [usage, setUsage] = useState(null)
+  const [previewVideo, setPreviewVideo] = useState(null)
+  const [isUploadingAudio, setIsUploadingAudio] = useState(false)
+  const audioInputRef = useRef(null)
 
   // Fetch avatars and recent videos
   useEffect(() => {
@@ -199,7 +220,7 @@ const VideoGeneration = () => {
           if (response.ok) {
             const result = await response.json()
             if (result.success) {
-              setRecentVideos(result.data.videos.slice(0, 6))
+              setRecentVideos(result.data.videos.slice(0, 3)) // Only show last 3 videos
             }
           }
         }
@@ -259,6 +280,66 @@ const VideoGeneration = () => {
     fetchUsageStats()
   }, [user])
 
+  // Poll for video generation status
+  useEffect(() => {
+    let interval = null
+
+    if (generationTaskId) {
+      interval = setInterval(async () => {
+        try {
+          const {
+            data: { session },
+          } = await supabase.auth.getSession()
+
+          if (session) {
+            const response = await fetch(
+              `${import.meta.env.VITE_BACKEND_API_URL}/video-generation/status/${generationTaskId}`,
+              {
+                headers: {
+                  Authorization: `Bearer ${session.access_token}`,
+                },
+              },
+            )
+
+            if (response.ok) {
+              const result = await response.json()
+
+              if (result.success) {
+                if (result.data.status === "completed") {
+                  setIsGenerating(false)
+                  setGenerationTaskId(null)
+                  setScript("") // Clear script on successful completion
+                  setAudioFile(null) // Clear audio file
+                  setAudioFileName("")
+                  setAudioDuration(0)
+                  setPreviewVideo(result.data.video_url)
+                  showMessage("Video generated successfully!", "success")
+
+                  // Refresh recent videos and usage
+                  fetchRecentVideos()
+                  fetchUsageStats()
+
+                  clearInterval(interval)
+                } else if (result.data.status === "failed") {
+                  setIsGenerating(false)
+                  setGenerationTaskId(null)
+                  showMessage("Video generation failed. Please try again.", "error")
+                  clearInterval(interval)
+                }
+              }
+            }
+          }
+        } catch (error) {
+          console.error("Error polling video status:", error)
+        }
+      }, 3000) // Poll every 3 seconds
+    }
+
+    return () => {
+      if (interval) clearInterval(interval)
+    }
+  }, [generationTaskId])
+
   const showMessage = (text, type = "info") => {
     setMessage(text)
     setMessageType(type)
@@ -270,9 +351,85 @@ const VideoGeneration = () => {
     setScript(randomPhrase)
   }
 
+  const handleAudioUpload = async (event) => {
+    const file = event.target.files[0]
+    if (!file) return
+
+    // Validate file type
+    if (!file.type.startsWith("audio/")) {
+      showMessage("Please select a valid audio file", "error")
+      return
+    }
+
+    // Validate file size (max 50MB)
+    if (file.size > 50 * 1024 * 1024) {
+      showMessage("Audio file must be less than 50MB", "error")
+      return
+    }
+
+    setIsUploadingAudio(true)
+
+    try {
+      // Get audio duration
+      const audio = new Audio()
+      const audioUrl = URL.createObjectURL(file)
+      audio.src = audioUrl
+
+      await new Promise((resolve, reject) => {
+        audio.onloadedmetadata = () => {
+          const durationMinutes = audio.duration / 60
+          setAudioDuration(durationMinutes)
+
+          // Check if audio duration exceeds user's remaining video generation minutes
+          if (usage && durationMinutes > usage.videoGeneration.remaining) {
+            reject(
+              new Error(
+                `Audio duration (${durationMinutes.toFixed(1)} minutes) exceeds your remaining video generation limit (${usage.videoGeneration.remaining.toFixed(1)} minutes)`,
+              ),
+            )
+            return
+          }
+
+          resolve()
+        }
+        audio.onerror = () => reject(new Error("Failed to load audio file"))
+      })
+
+      URL.revokeObjectURL(audioUrl)
+
+      // Upload to storage
+      const fileName = `temp_audio/${user.id}/${Date.now()}-${file.name}`
+      const { data: uploadData, error: uploadError } = await supabase.storage
+        .from("avatar-media")
+        .upload(fileName, file)
+
+      if (uploadError) throw uploadError
+
+      const { data: urlData } = supabase.storage.from("avatar-media").getPublicUrl(fileName)
+
+      setAudioFile(urlData.publicUrl)
+      setAudioFileName(file.name)
+      showMessage("Audio uploaded successfully!", "success")
+    } catch (error) {
+      console.error("Error uploading audio:", error)
+      showMessage(error.message || "Failed to upload audio", "error")
+      setAudioFile(null)
+      setAudioFileName("")
+      setAudioDuration(0)
+    } finally {
+      setIsUploadingAudio(false)
+      event.target.value = ""
+    }
+  }
+
   const handleGenerate = async () => {
-    if (!script.trim()) {
+    if (inputTab === "script" && !script.trim()) {
       showMessage("Please enter a script for your video", "error")
+      return
+    }
+
+    if (inputTab === "audio" && !audioFile) {
+      showMessage("Please upload an audio file for your video", "error")
       return
     }
 
@@ -287,8 +444,18 @@ const VideoGeneration = () => {
       return
     }
 
+    // For audio input, check if duration exceeds remaining minutes
+    if (inputTab === "audio" && audioDuration > usage.videoGeneration.remaining) {
+      showMessage(
+        `Audio duration (${audioDuration.toFixed(1)} minutes) exceeds your remaining video generation limit (${usage.videoGeneration.remaining.toFixed(1)} minutes)`,
+        "error",
+      )
+      return
+    }
+
     setIsGenerating(true)
     setMessage("")
+    setPreviewVideo(null) // Clear previous preview
 
     try {
       // Get the session to get the access token
@@ -300,45 +467,46 @@ const VideoGeneration = () => {
         throw new Error("No active session found")
       }
 
+      const requestBody = {
+        avatarId: selectedAvatar.id,
+        quality: quality,
+      }
+
+      if (inputTab === "script") {
+        requestBody.text = script
+      } else {
+        requestBody.audioUrl = audioFile
+        requestBody.audioDuration = audioDuration
+      }
+
       const response = await fetch(`${import.meta.env.VITE_BACKEND_API_URL}/video-generation/generate`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${session.access_token}`,
         },
-        body: JSON.stringify({
-          avatarId: selectedAvatar.id,
-          text: script,
-          quality: quality,
-        }),
+        body: JSON.stringify(requestBody),
       })
 
       if (!response.ok) {
-        const errorText = await response.text()
-        throw new Error(errorText || "Route not found")
+        const errorData = await response.json()
+        throw new Error(errorData.message || "Failed to start video generation")
       }
 
       const result = await response.json()
 
       if (result.success) {
+        setGenerationTaskId(result.data.taskId)
         showMessage(
-          `Video generation started! This may take ${quality === "high" ? "2-5 minutes" : "30-60 seconds"}.`,
+          `Video generation started! This may take ${quality === "high" ? "2-5 minutes" : "30-60 seconds"}. You can navigate away and come back later.`,
           "success",
         )
-        setScript("")
-
-        // Refresh recent videos and usage after a short delay
-        setTimeout(() => {
-          fetchRecentVideos()
-          fetchUsageStats()
-        }, 2000)
       } else {
         throw new Error(result.message || "Failed to generate video")
       }
     } catch (error) {
       console.error("Error generating video:", error)
       showMessage(error.message || "Failed to start video generation", "error")
-    } finally {
       setIsGenerating(false)
     }
   }
@@ -361,7 +529,7 @@ const VideoGeneration = () => {
         if (response.ok) {
           const result = await response.json()
           if (result.success) {
-            setRecentVideos(result.data.videos.slice(0, 6))
+            setRecentVideos(result.data.videos.slice(0, 3)) // Only show last 3 videos
           }
         }
       }
@@ -397,6 +565,15 @@ const VideoGeneration = () => {
     }
   }
 
+  const removeAudioFile = () => {
+    setAudioFile(null)
+    setAudioFileName("")
+    setAudioDuration(0)
+    if (audioInputRef.current) {
+      audioInputRef.current.value = ""
+    }
+  }
+
   return (
     <div
       className={`${theme === "dark" ? "bg-gray-900 text-gray-100" : "bg-gray-50 text-gray-900"} min-h-screen flex flex-col lg:flex-row p-4 lg:p-8 space-y-8 lg:space-y-0 lg:space-x-8`}
@@ -409,14 +586,16 @@ const VideoGeneration = () => {
         >
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-xl font-bold">Input</h2>
-            <button
-              onClick={handleMagicWrite}
-              className="flex items-center space-x-2 text-pink-500 hover:text-pink-600 transition-colors"
-              title="Generate random script"
-            >
-              <Wand2 size={20} />
-              <span className="text-sm font-medium">Magic Write</span>
-            </button>
+            {inputTab === "script" && (
+              <button
+                onClick={handleMagicWrite}
+                className="flex items-center space-x-2 text-pink-500 hover:text-pink-600 transition-colors"
+                title="Generate random script"
+              >
+                <Wand2 size={20} />
+                <span className="text-sm font-medium">Magic Write</span>
+              </button>
+            )}
           </div>
 
           {/* Avatar Selection */}
@@ -505,17 +684,94 @@ const VideoGeneration = () => {
             </div>
           )}
 
-          {/* Audio Input (Coming Soon) */}
+          {/* Audio Input */}
           {inputTab === "audio" && (
-            <div
-              className={`flex-grow flex items-center justify-center ${theme === "dark" ? "bg-gray-700" : "bg-gray-100"} rounded-lg`}
-            >
-              <div className="text-center p-8">
-                <Video className={`h-12 w-12 mx-auto mb-4 ${theme === "dark" ? "text-gray-600" : "text-gray-400"}`} />
-                <p className={`text-sm ${theme === "dark" ? "text-gray-400" : "text-gray-600"}`}>
-                  Audio-to-Video functionality is coming soon!
-                </p>
-              </div>
+            <div className="flex-grow">
+              {!audioFile ? (
+                <div
+                  className={`flex-grow flex items-center justify-center ${theme === "dark" ? "bg-gray-700" : "bg-gray-100"} rounded-lg border-2 border-dashed ${theme === "dark" ? "border-gray-600" : "border-gray-300"} cursor-pointer hover:border-pink-500 transition-colors`}
+                  onClick={() => audioInputRef.current?.click()}
+                >
+                  <div className="text-center p-8">
+                    {isUploadingAudio ? (
+                      <div className="flex flex-col items-center">
+                        <Loader2 className="h-12 w-12 mb-4 text-pink-500 animate-spin" />
+                        <p className={`text-sm ${theme === "dark" ? "text-gray-400" : "text-gray-600"}`}>
+                          Uploading and processing audio...
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="flex flex-col items-center">
+                        <Upload className={`h-12 w-12 mb-4 ${theme === "dark" ? "text-gray-600" : "text-gray-400"}`} />
+                        <p
+                          className={`text-sm font-medium mb-2 ${theme === "dark" ? "text-gray-300" : "text-gray-700"}`}
+                        >
+                          Click to upload audio file
+                        </p>
+                        <p className={`text-xs ${theme === "dark" ? "text-gray-400" : "text-gray-600"}`}>
+                          MP3, WAV, or other audio formats (max 50MB)
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <div className={`${theme === "dark" ? "bg-gray-700" : "bg-gray-100"} rounded-lg p-4`}>
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center space-x-3">
+                      <div className="p-2 bg-pink-100 dark:bg-pink-900/30 rounded-lg">
+                        <FileAudio className="h-6 w-6 text-pink-600" />
+                      </div>
+                      <div>
+                        <p className={`font-medium ${theme === "dark" ? "text-white" : "text-gray-900"}`}>
+                          {audioFileName}
+                        </p>
+                        <div className="flex items-center space-x-2 text-sm">
+                          <Clock className={`h-4 w-4 ${theme === "dark" ? "text-gray-400" : "text-gray-500"}`} />
+                          <span className={`${theme === "dark" ? "text-gray-400" : "text-gray-500"}`}>
+                            {audioDuration.toFixed(1)} minutes
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                    <button
+                      onClick={removeAudioFile}
+                      className={`p-2 rounded-full transition-colors ${
+                        theme === "dark"
+                          ? "hover:bg-red-500 text-gray-400 hover:text-white"
+                          : "hover:bg-red-500 text-gray-500 hover:text-white"
+                      }`}
+                    >
+                      <X size={16} />
+                    </button>
+                  </div>
+
+                  {usage && audioDuration > usage.videoGeneration.remaining && (
+                    <div className="mt-3 p-2 bg-red-100 dark:bg-red-900/20 border border-red-300 dark:border-red-700 rounded-lg">
+                      <div className="flex items-center space-x-2">
+                        <AlertTriangle size={14} className="text-red-500" />
+                        <span className="text-xs text-red-700 dark:text-red-400">
+                          Audio duration exceeds your remaining video generation limit
+                        </span>
+                      </div>
+                    </div>
+                  )}
+
+                  <audio controls className="w-full mt-3">
+                    <source src={audioFile} />
+                    Your browser does not support the audio element.
+                  </audio>
+                </div>
+              )}
+
+              <input
+                ref={audioInputRef}
+                type="file"
+                accept="audio/*"
+                onChange={handleAudioUpload}
+                className="hidden"
+                disabled={isUploadingAudio}
+              />
             </div>
           )}
         </div>
@@ -545,26 +801,42 @@ const VideoGeneration = () => {
                     Video Quality
                   </label>
                   <div className="space-y-2">
-                    {videoOptions?.qualities?.map((q) => (
-                      <label key={q.name} className="flex items-center space-x-3 cursor-pointer">
-                        <input
-                          type="radio"
-                          name="quality"
-                          value={q.name}
-                          checked={quality === q.name}
-                          onChange={(e) => setQuality(e.target.value)}
-                          className="text-pink-500 focus:ring-pink-500"
-                        />
-                        <div>
-                          <div className={`font-medium ${theme === "dark" ? "text-white" : "text-gray-900"}`}>
-                            {q.name === "high" ? "High Quality" : "Fast Generation"}
-                          </div>
-                          <div className={`text-xs ${theme === "dark" ? "text-gray-400" : "text-gray-600"}`}>
-                            {q.description} • {q.estimatedTime}
-                          </div>
+                    <label className="flex items-center space-x-3 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="quality"
+                        value="high"
+                        checked={quality === "high"}
+                        onChange={(e) => setQuality(e.target.value)}
+                        className="text-pink-500 focus:ring-pink-500"
+                      />
+                      <div>
+                        <div className={`font-medium ${theme === "dark" ? "text-white" : "text-gray-900"}`}>
+                          High Quality
                         </div>
-                      </label>
-                    ))}
+                        <div className={`text-xs ${theme === "dark" ? "text-gray-400" : "text-gray-600"}`}>
+                          Best lip sync and animation • 2-5 minutes
+                        </div>
+                      </div>
+                    </label>
+                    <label className="flex items-center space-x-3 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="quality"
+                        value="fast"
+                        checked={quality === "fast"}
+                        onChange={(e) => setQuality(e.target.value)}
+                        className="text-pink-500 focus:ring-pink-500"
+                      />
+                      <div>
+                        <div className={`font-medium ${theme === "dark" ? "text-white" : "text-gray-900"}`}>
+                          Fast Generation
+                        </div>
+                        <div className={`text-xs ${theme === "dark" ? "text-gray-400" : "text-gray-600"}`}>
+                          Quick processing with good quality • 30-60 seconds
+                        </div>
+                      </div>
+                    </label>
                   </div>
                 </div>
               </motion.div>
@@ -610,7 +882,12 @@ const VideoGeneration = () => {
         <button
           onClick={handleGenerate}
           disabled={
-            isGenerating || !script.trim() || !selectedAvatar || (usage && usage.videoGeneration.remaining <= 0)
+            isGenerating ||
+            (inputTab === "script" && !script.trim()) ||
+            (inputTab === "audio" && !audioFile) ||
+            !selectedAvatar ||
+            (usage && usage.videoGeneration.remaining <= 0) ||
+            (inputTab === "audio" && audioDuration > usage?.videoGeneration?.remaining)
           }
           className="w-full bg-gradient-to-r from-pink-500 to-purple-600 text-white font-bold py-4 rounded-full text-lg shadow-lg hover:from-pink-600 hover:to-purple-700 transition-all duration-300 transform active:scale-95 disabled:from-gray-400 disabled:to-gray-500 disabled:cursor-not-allowed disabled:shadow-none flex items-center justify-center space-x-2"
         >
@@ -654,7 +931,14 @@ const VideoGeneration = () => {
           <div
             className={`w-full aspect-video ${theme === "dark" ? "bg-gray-900" : "bg-gray-100"} rounded-lg overflow-hidden flex items-center justify-center relative`}
           >
-            {isGenerating ? (
+            {previewVideo ? (
+              <video
+                src={previewVideo}
+                controls
+                className="w-full h-full object-cover"
+                poster={selectedAvatar?.image_url}
+              />
+            ) : isGenerating ? (
               <div className="text-center">
                 <Loader2 className="h-12 w-12 mx-auto mb-4 animate-spin text-pink-500" />
                 <p className={`text-sm ${theme === "dark" ? "text-gray-400" : "text-gray-600"}`}>
@@ -663,12 +947,20 @@ const VideoGeneration = () => {
                 <p className={`text-xs mt-2 ${theme === "dark" ? "text-gray-500" : "text-gray-500"}`}>
                   This may take {quality === "high" ? "2-5 minutes" : "30-60 seconds"}
                 </p>
+                <p className={`text-xs mt-1 ${theme === "dark" ? "text-gray-500" : "text-gray-500"}`}>
+                  You can navigate away and come back later
+                </p>
               </div>
             ) : (
               <div className={`text-center ${theme === "dark" ? "text-gray-400" : "text-gray-600"} text-sm`}>
                 <Video className="h-12 w-12 mx-auto mb-2" />
                 <p>Your video preview will appear here</p>
                 {selectedAvatar && <p className="mt-2 text-xs">Selected: {selectedAvatar.name}</p>}
+                {inputTab === "audio" && audioFile && (
+                  <p className="mt-1 text-xs">
+                    Audio: {audioFileName} ({audioDuration.toFixed(1)}min)
+                  </p>
+                )}
               </div>
             )}
           </div>
@@ -689,43 +981,50 @@ const VideoGeneration = () => {
 
           {recentVideos.length > 0 ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {recentVideos.slice(0, 6).map((video) => (
+              {recentVideos.map((video) => (
                 <motion.div
                   key={video.id}
                   whileHover={{ scale: 1.02 }}
-                  className={`relative aspect-video ${theme === "dark" ? "bg-gray-900" : "bg-gray-100"} rounded-lg overflow-hidden shadow-md group`}
+                  className={`relative aspect-video ${theme === "dark" ? "bg-gray-900" : "bg-gray-100"} rounded-lg overflow-hidden shadow-md group cursor-pointer`}
+                  onClick={() => {
+                    if (video.video_url) {
+                      setPreviewVideo(video.video_url)
+                    }
+                  }}
                 >
                   {video.video_url ? (
-                    <video
-                      src={video.video_url}
-                      className="w-full h-full object-cover"
-                      poster={video.avatars?.image_url}
-                    />
+                    <>
+                      <video
+                        src={video.video_url}
+                        className="w-full h-full object-cover"
+                        poster={video.avatars?.image_url}
+                      />
+                      <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black bg-opacity-30">
+                        <Play className="h-8 w-8 text-white bg-black bg-opacity-50 rounded-full p-2" />
+                      </div>
+                    </>
+                  ) : video.status === "failed" ? (
+                    <div className="w-full h-full flex items-center justify-center bg-red-100 dark:bg-red-900/20">
+                      <div className="text-center">
+                        <X className="h-6 w-6 text-red-500 mx-auto mb-2" />
+                        <p className="text-sm text-red-600 dark:text-red-400">Failed</p>
+                      </div>
+                    </div>
                   ) : (
                     <div className="w-full h-full flex items-center justify-center">
-                      <Loader2 className="animate-spin h-6 w-6 text-pink-500" />
-                    </div>
-                  )}
-
-                  {!video.video_url && (
-                    <div className="absolute inset-0 bg-black bg-opacity-70 flex items-center justify-center text-white text-sm font-semibold">
                       <div className="text-center">
-                        <Loader2 className="animate-spin h-5 w-5 mx-auto mb-2" />
-                        Processing...
+                        <Loader2 className="animate-spin h-6 w-6 text-pink-500 mx-auto mb-2" />
+                        <p className="text-sm text-gray-600 dark:text-gray-400">Processing...</p>
                       </div>
                     </div>
                   )}
 
                   <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black to-transparent p-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <p className="text-white text-sm font-medium truncate">{video.prompt?.substring(0, 30)}...</p>
+                    <p className="text-white text-sm font-medium truncate">
+                      {video.prompt?.substring(0, 30) || video.audio_filename?.substring(0, 30)}...
+                    </p>
                     <p className="text-gray-300 text-xs">{video.avatars?.name}</p>
                   </div>
-
-                  {video.video_url && (
-                    <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                      <Play className="h-8 w-8 text-white bg-black bg-opacity-50 rounded-full p-2" />
-                    </div>
-                  )}
                 </motion.div>
               ))}
             </div>
