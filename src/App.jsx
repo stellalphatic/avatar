@@ -12,9 +12,9 @@ import ProtectedRoute from './ProtectedRoute';
 // Dashboard Pages
 import DashboardOverview from './dashboard_pages/DashboardOverview';
 import MyCreations from './dashboard_pages/MyCreations';
-import PublicGallery from './dashboard_pages/PublicGallery';
+// import PublicGallery from './dashboard_pages/PublicGallery';
 import CreateAvatar from './dashboard_pages/CreateAvatar';
-import SettingsPage from './dashboard_pages/SettingsPage'; // Updated SettingsPage
+import SettingsPage from './dashboard_pages/SettingsPage'; 
 import VoicesPage from './dashboard_pages/VoicesPage';
 import ChatWithAvatarPage from './dashboard_pages/ConversationStudio';
 import IntegrationsPage from './dashboard_pages/IntegrationsPage';
@@ -23,6 +23,7 @@ import VideoGenerationPage from './dashboard_pages/VideoGeneration';
 import VideoLibraryPage from './dashboard_pages/VideoLibrary';
 import ConversationLibraryPage from './dashboard_pages/ConversationLibrary';
 
+import APIManagement from './dashboard_pages/APIManagement';
 
 // New/Updated top-level pages
 import PricingPage from './pages/PricingPage'; // Full-page pricing
@@ -32,7 +33,7 @@ import TermsConditionsPage from './pages/TermsConditionsPage';
 // Placeholder components for routes not yet fully implemented
 // const ConversationLibraryPage = () => <div className="p-8 text-center text-xl dark:text-gray-200">Conversation Library Coming Soon!</div>;
 // const VideoGenerationPage = () => <div className="p-8 text-center text-xl dark:text-gray-200">Video Generation Coming Soon!</div>;
-// const VideoLibraryPage = () => <div className="p-8 text-center text-xl dark:text-gray-200">Video Library Coming Soon!</div>;
+const PublicGallery = () => <div className="p-8 text-center text-xl dark:text-gray-200">Public Gallery Coming Soon!</div>;
 
 
 function App() {
@@ -70,7 +71,7 @@ function App() {
                 <Route path="video/library" element={<VideoLibraryPage />} />
 
                 {/* Integrations & Settings */}
-                <Route path="integrations" element={<IntegrationsPage />} /> 
+                <Route path="integrations" element={<APIManagement />} /> 
                 <Route path="settings" element={<SettingsPage />} /> 
                 
                 
