@@ -1,6 +1,7 @@
 "use client"
 
 import React, { useState, createContext, useContext, useEffect } from "react"
+import { useTheme } from "../../contexts/ThemeContext"
 
 const DialogContext = createContext()
 
@@ -34,6 +35,7 @@ const DialogTrigger = ({ children, asChild, ...props }) => {
 
 const DialogContent = ({ children, className = "", ...props }) => {
   const { isOpen, setIsOpen } = useContext(DialogContext)
+  const { theme } = useTheme()
 
   useEffect(() => {
     if (isOpen) {
@@ -53,7 +55,9 @@ const DialogContent = ({ children, className = "", ...props }) => {
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="fixed inset-0 bg-black/50" onClick={() => setIsOpen(false)} />
       <div
-        className={`relative z-50 grid w-full max-w-lg gap-4 border border-gray-200 bg-white p-6 shadow-lg duration-200 rounded-lg ${className}`}
+        className={`relative z-50 grid w-full max-w-lg gap-4 border p-6 shadow-lg duration-200 rounded-lg ${
+          theme === "dark" ? "border-gray-700 bg-gray-800 text-white" : "border-gray-200 bg-white text-gray-900"
+        } ${className}`}
         {...props}
       >
         {children}
@@ -79,8 +83,10 @@ const DialogTitle = ({ children, className = "", ...props }) => {
 }
 
 const DialogDescription = ({ children, className = "", ...props }) => {
+  const { theme } = useTheme()
+
   return (
-    <p className={`text-sm text-gray-500 ${className}`} {...props}>
+    <p className={`text-sm ${theme === "dark" ? "text-gray-400" : "text-gray-500"} ${className}`} {...props}>
       {children}
     </p>
   )

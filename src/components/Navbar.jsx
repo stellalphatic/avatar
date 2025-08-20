@@ -26,7 +26,7 @@ const Navbar = () => {
   const navLinks = [
     { name: "About", id: "about" },
     { name: "Pricing", id: "pricing" },
-    { name: "API Docs", href: "/api-docs" },
+    { name: "API Docs", href: "https://docs.metapresence.my" },
   ]
 
   const handleLogout = async () => {

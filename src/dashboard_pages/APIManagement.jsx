@@ -79,10 +79,13 @@ const APIManagement = () => {
     allowedEndpoints: ["audio_generation", "video_generation", "avatar_creation"],
   })
 
+  const [usage, setUsage] = useState(null)
+
   useEffect(() => {
     if (user) {
       fetchApiKeys()
       fetchUsageData()
+      fetchUsageStats()
     }
   }, [user])
 
@@ -93,21 +96,17 @@ const APIManagement = () => {
       } = await supabase.auth.getSession()
 
       if (session) {
-        try {
-          const response = await fetch(`${import.meta.env.VITE_BACKEND_API_URL}/api-keys`, {
-            headers: {
-              Authorization: `Bearer ${session.access_token}`,
-            },
-          })
-          if (response.ok) {
-            const result = await response.json()
-            if (result.success) {
-              setApiKeys(result.data)
-              return
-            }
+        const response = await fetch(`${import.meta.env.VITE_BACKEND_API_URL}/api-keys`, {
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+          },
+        })
+        if (response.ok) {
+          const result = await response.json()
+          if (result.success) {
+            setApiKeys(result.data)
+            return
           }
-        } catch (backendError) {
-          // Silent fallback to Supabase
         }
       }
 
@@ -134,77 +133,76 @@ const APIManagement = () => {
       } = await supabase.auth.getSession()
 
       if (session) {
-        try {
-          const response = await fetch(`${import.meta.env.VITE_BACKEND_API_URL}/api-usage/analytics`, {
-            headers: {
-              Authorization: `Bearer ${session.access_token}`,
-            },
-          })
-          if (response.ok) {
-            const result = await response.json()
-            if (result.success) {
-              setUsageData(result.data)
-              return
-            }
+        const response = await fetch(`${import.meta.env.VITE_BACKEND_API_URL}/api-usage/analytics`, {
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+          },
+        })
+        if (response.ok) {
+          const result = await response.json()
+          if (result.success) {
+            setUsageData(result.data)
+            return
           }
-        } catch (backendError) {
-          // Silent fallback
         }
       }
 
-      // Fallback to direct Supabase query
-      const { data, error } = await supabase
-        .from("api_usage")
-        .select(`
-          *,
-          api_keys!inner(name)
-        `)
-        .eq("user_id", user.id)
-        .gte("created_at", new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString())
-        .order("created_at", { ascending: true })
-
-      if (error) throw error
-
-      const processedData = processUsageData(data || [])
-      setUsageData(processedData)
+      // Fallback with empty data
+      setUsageData({ daily: [], endpoints: [] })
     } catch (error) {
       console.error("Error fetching usage data:", error)
+      setUsageData({ daily: [], endpoints: [] })
     }
   }
 
-  const processUsageData = (data) => {
-    const dailyUsage = {}
-    const endpointUsage = { audio_generation: 0, video_generation: 0, avatar_creation: 0 }
+  const fetchUsageStats = async () => {
+    if (!user) return
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession()
 
-    data.forEach((record) => {
-      const date = new Date(record.created_at).toLocaleDateString()
-      if (!dailyUsage[date]) {
-        dailyUsage[date] = { date, audio: 0, video: 0, avatar: 0, total: 0 }
+      if (session) {
+        const response = await fetch(`${import.meta.env.VITE_BACKEND_API_URL}/api-usage/stats`, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+          },
+        })
+        if (response.ok) {
+          const result = await response.json()
+          if (result.success) {
+            setUsage({
+              ...result.data,
+              apiCalls: { used: 0, limit: 10000, remaining: 10000 },
+            })
+            return
+          }
+        }
       }
 
-      const amount = Number.parseFloat(record.usage_amount) || 0
-      dailyUsage[date][record.endpoint_type.split("_")[0]] += amount
-      dailyUsage[date].total += amount
-      endpointUsage[record.endpoint_type] += amount
-    })
-
-    return {
-      daily: Object.values(dailyUsage),
-      endpoints: Object.entries(endpointUsage).map(([key, value]) => ({
-        name: key.replace("_", " ").replace(/\b\w/g, (l) => l.toUpperCase()),
-        value: value,
-      })),
+      const response = await fetch(`${import.meta.env.VITE_BACKEND_API_URL}/usage/stats`, {
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+        },
+      })
+      if (response.ok) {
+        const result = await response.json()
+        if (result.success) {
+          // Map existing usage data to API format
+          setUsage({
+            ...result.data,
+            apiCalls: { used: 0, limit: 10000, remaining: 10000 },
+          })
+        }
+      }
+    } catch (error) {
+      console.error("Error fetching usage stats:", error)
+      setUsage({
+        apiCalls: { used: 0, limit: 10000, remaining: 10000 },
+        currentPlan: "Free",
+      })
     }
-  }
-
-  const generateApiKey = () => {
-    const prefix = "mp_"
-    const key =
-      prefix +
-      Array.from(crypto.getRandomValues(new Uint8Array(32)))
-        .map((b) => b.toString(16).padStart(2, "0"))
-        .join("")
-    return { key, prefix }
   }
 
   const createApiKey = async () => {
@@ -220,76 +218,37 @@ const APIManagement = () => {
       } = await supabase.auth.getSession()
 
       if (session) {
-        try {
-          const response = await fetch(`${import.meta.env.VITE_BACKEND_API_URL}/api-keys/create`, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${session.access_token}`,
-            },
-            body: JSON.stringify({
-              name: newKeyForm.name,
-              allowedEndpoints: newKeyForm.allowedEndpoints,
-            }),
-          })
+        const response = await fetch(`${import.meta.env.VITE_BACKEND_API_URL}/api-keys/create`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${session.access_token}`,
+          },
+          body: JSON.stringify({
+            name: newKeyForm.name,
+            allowedEndpoints: newKeyForm.allowedEndpoints,
+          }),
+        })
 
-          const result = await response.json()
-          if (response.ok && result.success) {
-            alert(
-              `API Key Created Successfully!\n\nKey: ${result.data.key}\n\nSave this key securely - you won't be able to see it again!`,
-            )
-            setShowCreateDialog(false)
-            setNewKeyForm({
-              name: "",
-              allowedEndpoints: ["audio_generation", "video_generation", "avatar_creation"],
-            })
-            fetchApiKeys()
-            return
-          }
-        } catch (backendError) {
-          // Silent fallback
+        const result = await response.json()
+        if (response.ok && result.success) {
+          alert(
+            `API Key Created Successfully!\n\nKey: ${result.data.key}\n\nSave this key securely - you won't be able to see it again!`,
+          )
+          setShowCreateDialog(false)
+          setNewKeyForm({
+            name: "",
+            allowedEndpoints: ["audio_generation", "video_generation", "avatar_creation"],
+          })
+          fetchApiKeys()
+          return
+        } else {
+          throw new Error(result.message || "Failed to create API key")
         }
       }
-
-      // Fallback to direct Supabase creation
-      const { key, prefix } = generateApiKey()
-      const keyHash = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(key))
-      const hashArray = Array.from(new Uint8Array(keyHash))
-      const hashHex = hashArray.map((b) => b.toString(16).padStart(2, "0")).join("")
-
-      const { data, error } = await supabase
-        .from("api_keys")
-        .insert([
-          {
-            user_id: user.id,
-            name: newKeyForm.name,
-            key_hash: hashHex,
-            prefix: prefix,
-            allowed_endpoints: newKeyForm.allowedEndpoints,
-            rate_limit_per_minute: 60,
-            rate_limit_per_hour: 1000,
-            rate_limit_per_day: 10000,
-            is_active: true,
-          },
-        ])
-        .select()
-        .single()
-
-      if (error) throw error
-
-      alert(
-        `API Key Created Successfully!\n\nKey: ${key}\n\nSave this key securely - you won't be able to see it again!`,
-      )
-
-      setShowCreateDialog(false)
-      setNewKeyForm({
-        name: "",
-        allowedEndpoints: ["audio_generation", "video_generation", "avatar_creation"],
-      })
-      fetchApiKeys()
     } catch (error) {
       console.error("Error creating API key:", error)
-      alert("Error creating API key. Please try again.")
+      alert(`Error creating API key: ${error.message}`)
     } finally {
       setCreating(false)
     }
@@ -318,19 +277,15 @@ const APIManagement = () => {
       } = await supabase.auth.getSession()
 
       if (session) {
-        try {
-          const response = await fetch(`${import.meta.env.VITE_BACKEND_API_URL}/api-keys/${keyId}/revoke`, {
-            method: "POST",
-            headers: {
-              Authorization: `Bearer ${session.access_token}`,
-            },
-          })
-          if (response.ok) {
-            fetchApiKeys()
-            return
-          }
-        } catch (backendError) {
-          // Silent fallback
+        const response = await fetch(`${import.meta.env.VITE_BACKEND_API_URL}/api-keys/${keyId}/revoke`, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+          },
+        })
+        if (response.ok) {
+          fetchApiKeys()
+          return
         }
       }
 
@@ -340,7 +295,12 @@ const APIManagement = () => {
       fetchApiKeys()
     } catch (error) {
       console.error("Error revoking API key:", error)
+      alert("Error revoking API key. Please try again.")
     }
+  }
+
+  const handleCreateFirstApiKey = () => {
+    setShowCreateDialog(true)
   }
 
   if (loading) {
@@ -355,43 +315,56 @@ const APIManagement = () => {
 
   return (
     <div
-      className={`container mx-auto p-6 space-y-6 ${theme === "dark" ? "bg-gray-900 text-white" : "bg-gray-50 text-gray-900"} min-h-screen`}
+      className={`container mx-auto p-4 sm:p-6 space-y-6 min-h-screen ${
+        theme === "dark" ? "bg-gray-900 text-white" : "bg-gray-50 text-gray-900"
+      }`}
     >
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className={`text-3xl font-bold ${theme === "dark" ? "text-white" : "text-gray-900"}`}>API Management</h1>
-          <p className={`${theme === "dark" ? "text-gray-400" : "text-gray-600"} mt-2`}>
+          <h1 className={`text-2xl sm:text-3xl font-bold ${theme === "dark" ? "text-white" : "text-gray-900"}`}>
+            API Management
+          </h1>
+          <p className={`${theme === "dark" ? "text-gray-400" : "text-gray-600"} mt-2 text-sm sm:text-base`}>
             Manage your API keys and monitor usage across all endpoints
           </p>
         </div>
         <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
           <DialogTrigger asChild>
-            <Button className="bg-gradient-to-r from-pink-500 to-purple-600 hover:from-pink-600 hover:to-purple-700 text-white">
+            <Button className="bg-gradient-to-r from-pink-500 to-purple-600 hover:from-pink-600 hover:to-purple-700 text-white w-full sm:w-auto">
               + Create API Key
             </Button>
           </DialogTrigger>
-          <DialogContent className="max-w-md">
+          <DialogContent
+            className={`max-w-md ${theme === "dark" ? "bg-gray-800 text-white border-gray-700" : "bg-white text-gray-900 border-gray-200"}`}
+          >
             <DialogHeader>
-              <DialogTitle>Create New API Key</DialogTitle>
-              <DialogDescription>Generate a new API key for accessing MetaPresence APIs</DialogDescription>
+              <DialogTitle className={theme === "dark" ? "text-white" : "text-gray-900"}>
+                Create New API Key
+              </DialogTitle>
+              <DialogDescription className={theme === "dark" ? "text-gray-400" : "text-gray-600"}>
+                Generate a new API key for accessing MetaPresence APIs
+              </DialogDescription>
             </DialogHeader>
             <div className="space-y-4">
               <div>
-                <Label htmlFor="name">Key Name</Label>
+                <Label htmlFor="name" className={theme === "dark" ? "text-gray-200" : "text-gray-700"}>
+                  Key Name
+                </Label>
                 <Input
                   id="name"
                   value={newKeyForm.name}
                   onChange={(e) => setNewKeyForm((prev) => ({ ...prev, name: e.target.value }))}
                   placeholder="My App API Key"
+                  className={theme === "dark" ? "bg-gray-700 border-gray-600 text-white placeholder-gray-400" : ""}
                 />
               </div>
 
               <div>
-                <Label>Activate Endpoints</Label>
+                <Label className={theme === "dark" ? "text-gray-200" : "text-gray-700"}>Activate Endpoints</Label>
                 <div className="space-y-3 mt-2">
                   {["audio_generation", "video_generation", "avatar_creation"].map((endpoint) => (
                     <div key={endpoint} className="flex items-center justify-between">
-                      <Label className="text-sm">
+                      <Label className={`text-sm ${theme === "dark" ? "text-gray-300" : "text-gray-600"}`}>
                         {endpoint.replace("_", " ").replace(/\b\w/g, (l) => l.toUpperCase())}
                       </Label>
                       <Switch
@@ -415,14 +388,25 @@ const APIManagement = () => {
                 </div>
               </div>
 
-              <div className="flex justify-end space-x-2">
-                <Button variant="outline" onClick={() => setShowCreateDialog(false)} disabled={creating}>
+              <div className="flex flex-col sm:flex-row justify-end space-y-2 sm:space-y-0 sm:space-x-2">
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setShowCreateDialog(false)
+                    setNewKeyForm({
+                      name: "",
+                      allowedEndpoints: ["audio_generation", "video_generation", "avatar_creation"],
+                    })
+                  }}
+                  disabled={creating}
+                  className={`w-full sm:w-auto ${theme === "dark" ? "border-gray-600 text-gray-300 hover:bg-gray-700" : ""}`}
+                >
                   Cancel
                 </Button>
                 <Button
                   onClick={createApiKey}
                   disabled={!newKeyForm.name.trim() || creating}
-                  className="bg-gradient-to-r from-pink-500 to-purple-600 hover:from-pink-600 hover:to-purple-700 text-white"
+                  className="bg-gradient-to-r from-pink-500 to-purple-600 hover:from-pink-600 hover:to-purple-700 text-white w-full sm:w-auto"
                 >
                   {creating ? "Creating..." : "Create API Key"}
                 </Button>
@@ -433,29 +417,37 @@ const APIManagement = () => {
       </div>
 
       <Tabs defaultValue="keys" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-3">
-          <TabsTrigger value="keys">API Keys</TabsTrigger>
-          <TabsTrigger value="analytics">Analytics</TabsTrigger>
-          <TabsTrigger value="usage">Usage Limits</TabsTrigger>
+        <TabsList className={`grid w-full grid-cols-3 ${theme === "dark" ? "bg-gray-800" : ""}`}>
+          <TabsTrigger value="keys" className={theme === "dark" ? "data-[state=active]:bg-gray-700" : ""}>
+            API Keys
+          </TabsTrigger>
+          <TabsTrigger value="analytics" className={theme === "dark" ? "data-[state=active]:bg-gray-700" : ""}>
+            Analytics
+          </TabsTrigger>
+          <TabsTrigger value="usage" className={theme === "dark" ? "data-[state=active]:bg-gray-700" : ""}>
+            Usage Limits
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="keys" className="space-y-4">
           {apiKeys.length === 0 ? (
-            <Card>
+            <Card className={theme === "dark" ? "bg-gray-800 border-gray-700" : "bg-white border-gray-200"}>
               <CardContent className="flex flex-col items-center justify-center py-12">
                 <div
-                  className={`w-12 h-12 ${theme === "dark" ? "bg-gray-700" : "bg-gray-200"} rounded-full flex items-center justify-center mb-4`}
+                  className={`w-12 h-12 rounded-full flex items-center justify-center mb-4 ${
+                    theme === "dark" ? "bg-gray-700" : "bg-gray-100"
+                  }`}
                 >
                   🔑
                 </div>
-                <h3 className={`text-lg font-semibold ${theme === "dark" ? "text-white" : "text-gray-900"} mb-2`}>
+                <h3 className={`text-lg font-semibold mb-2 ${theme === "dark" ? "text-white" : "text-gray-900"}`}>
                   No API Keys Yet
                 </h3>
-                <p className={`${theme === "dark" ? "text-gray-400" : "text-gray-600"} text-center mb-4`}>
+                <p className={`text-center mb-4 ${theme === "dark" ? "text-gray-400" : "text-gray-600"}`}>
                   Create your first API key to start using MetaPresence APIs
                 </p>
                 <Button
-                  onClick={() => setShowCreateDialog(true)}
+                  onClick={handleCreateFirstApiKey}
                   className="bg-gradient-to-r from-pink-500 to-purple-600 hover:from-pink-600 hover:to-purple-700 text-white"
                 >
                   Create Your First API Key
@@ -465,20 +457,29 @@ const APIManagement = () => {
           ) : (
             <div className="grid gap-4">
               {apiKeys.map((apiKey) => (
-                <Card key={apiKey.id} className={`${!apiKey.is_active ? "opacity-60" : ""}`}>
+                <Card
+                  key={apiKey.id}
+                  className={`${!apiKey.is_active ? "opacity-60" : ""} ${
+                    theme === "dark" ? "bg-gray-800 border-gray-700" : "bg-white border-gray-200"
+                  }`}
+                >
                   <CardHeader>
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <CardTitle className="flex items-center gap-2">
-                          {apiKey.name}
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                      <div className="flex-1">
+                        <CardTitle
+                          className={`flex flex-wrap items-center gap-2 ${theme === "dark" ? "text-white" : ""}`}
+                        >
+                          <span className="break-all">{apiKey.name}</span>
                           <Badge variant={apiKey.is_active ? "default" : "destructive"}>
                             {apiKey.is_active ? "Active" : "Revoked"}
                           </Badge>
                           <Badge variant="outline">{apiKey.environment || "production"}</Badge>
                         </CardTitle>
-                        <CardDescription>{apiKey.description || "No description"}</CardDescription>
+                        <CardDescription className={theme === "dark" ? "text-gray-400" : ""}>
+                          {apiKey.description || "No description"}
+                        </CardDescription>
                       </div>
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-shrink-0">
                         <Button variant="outline" size="sm" onClick={() => toggleKeyVisibility(apiKey.id)}>
                           {visibleKeys[apiKey.id] ? "👁️" : "🙈"}
                         </Button>
@@ -496,10 +497,18 @@ const APIManagement = () => {
                   <CardContent>
                     <div className="space-y-4">
                       <div>
-                        <Label className="text-sm font-medium">API Key</Label>
+                        <Label
+                          className={`text-sm font-medium ${theme === "dark" ? "text-gray-200" : "text-gray-700"}`}
+                        >
+                          API Key
+                        </Label>
                         <div className="flex items-center gap-2 mt-1">
                           <code
-                            className={`flex-1 p-2 ${theme === "dark" ? "bg-gray-800" : "bg-gray-100"} rounded text-sm font-mono`}
+                            className={`flex-1 p-2 rounded text-sm font-mono break-all ${
+                              theme === "dark"
+                                ? "bg-gray-700 text-gray-200 border-gray-600"
+                                : "bg-gray-50 text-gray-800 border-gray-200"
+                            } border`}
                           >
                             {visibleKeys[apiKey.id]
                               ? apiKey.prefix + "..."
@@ -508,24 +517,28 @@ const APIManagement = () => {
                         </div>
                       </div>
 
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-sm">
                         <div>
                           <Label className={`text-xs ${theme === "dark" ? "text-gray-400" : "text-gray-500"}`}>
                             Created
                           </Label>
-                          <p>{new Date(apiKey.created_at).toLocaleDateString()}</p>
+                          <p className={theme === "dark" ? "text-gray-200" : ""}>
+                            {new Date(apiKey.created_at).toLocaleDateString()}
+                          </p>
                         </div>
                         <div>
                           <Label className={`text-xs ${theme === "dark" ? "text-gray-400" : "text-gray-500"}`}>
                             Last Used
                           </Label>
-                          <p>{apiKey.last_used_at ? new Date(apiKey.last_used_at).toLocaleDateString() : "Never"}</p>
+                          <p className={theme === "dark" ? "text-gray-200" : ""}>
+                            {apiKey.last_used_at ? new Date(apiKey.last_used_at).toLocaleDateString() : "Never"}
+                          </p>
                         </div>
                         <div>
                           <Label className={`text-xs ${theme === "dark" ? "text-gray-400" : "text-gray-500"}`}>
                             Rate Limits
                           </Label>
-                          <p>
+                          <p className={theme === "dark" ? "text-gray-200" : ""}>
                             {apiKey.rate_limit_per_minute || 60}/min, {apiKey.rate_limit_per_hour || 1000}/hr
                           </p>
                         </div>
@@ -533,7 +546,9 @@ const APIManagement = () => {
                           <Label className={`text-xs ${theme === "dark" ? "text-gray-400" : "text-gray-500"}`}>
                             Endpoints
                           </Label>
-                          <p>{apiKey.allowed_endpoints?.length || 0} enabled</p>
+                          <p className={theme === "dark" ? "text-gray-200" : ""}>
+                            {apiKey.allowed_endpoints?.length || 0} enabled
+                          </p>
                         </div>
                       </div>
 
@@ -561,20 +576,24 @@ const APIManagement = () => {
 
         <TabsContent value="analytics" className="space-y-6">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <Card>
+            <Card className={theme === "dark" ? "bg-gray-800 border-gray-700" : "bg-white border-gray-200"}>
               <CardHeader>
-                <CardTitle>Daily Usage (Last 30 Days)</CardTitle>
-                <CardDescription>API usage across all endpoints</CardDescription>
+                <CardTitle className={theme === "dark" ? "text-white" : ""}>Daily Usage (Last 30 Days)</CardTitle>
+                <CardDescription className={theme === "dark" ? "text-gray-400" : ""}>
+                  API usage across all endpoints
+                </CardDescription>
               </CardHeader>
               <CardContent>
                 <SimpleLineChart data={usageData.daily} title="Daily API Calls" theme={theme} />
               </CardContent>
             </Card>
 
-            <Card>
+            <Card className={theme === "dark" ? "bg-gray-800 border-gray-700" : "bg-white border-gray-200"}>
               <CardHeader>
-                <CardTitle>Usage by Endpoint</CardTitle>
-                <CardDescription>Distribution of API calls</CardDescription>
+                <CardTitle className={theme === "dark" ? "text-white" : ""}>Usage by Endpoint</CardTitle>
+                <CardDescription className={theme === "dark" ? "text-gray-400" : ""}>
+                  Distribution of API calls
+                </CardDescription>
               </CardHeader>
               <CardContent>
                 <SimplePieChart data={usageData.endpoints} title="Endpoint Distribution" theme={theme} />
@@ -582,14 +601,14 @@ const APIManagement = () => {
             </Card>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <Card>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <Card className={theme === "dark" ? "bg-gray-800 border-gray-700" : "bg-white border-gray-200"}>
               <CardContent className="p-4">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm text-gray-500">This Month</p>
-                    <p className="text-2xl font-bold">
-                      {usageData.daily?.reduce((sum, d) => sum + d.total, 0)?.toFixed(1) || 0}
+                    <p className={`text-sm ${theme === "dark" ? "text-gray-400" : "text-gray-500"}`}>This Month</p>
+                    <p className={`text-2xl font-bold ${theme === "dark" ? "text-white" : ""}`}>
+                      {usage?.apiCalls?.used || usageData.daily?.reduce((sum, d) => sum + d.total, 0)?.toFixed(1) || 0}
                     </p>
                   </div>
                   <div className="text-2xl">📊</div>
@@ -597,43 +616,44 @@ const APIManagement = () => {
               </CardContent>
             </Card>
 
-            <Card>
+            <Card className={theme === "dark" ? "bg-gray-800 border-gray-700" : "bg-white border-gray-200"}>
               <CardContent className="p-4">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm text-gray-500">Active Keys</p>
-                    <p className="text-2xl font-bold">{apiKeys.filter((k) => k.is_active).length}</p>
+                    <p className={`text-sm ${theme === "dark" ? "text-gray-400" : "text-gray-500"}`}>Active Keys</p>
+                    <p className={`text-2xl font-bold ${theme === "dark" ? "text-white" : ""}`}>
+                      {apiKeys.filter((k) => k.is_active).length}
+                    </p>
                   </div>
                   <div className="text-2xl">🔑</div>
                 </div>
               </CardContent>
             </Card>
 
-            <Card>
+            <Card className={theme === "dark" ? "bg-gray-800 border-gray-700" : "bg-white border-gray-200"}>
               <CardContent className="p-4">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm text-gray-500">Endpoints</p>
-                    <p className="text-2xl font-bold">{usageData.endpoints?.length || 0}</p>
+                    <p className={`text-sm ${theme === "dark" ? "text-gray-400" : "text-gray-500"}`}>Endpoints</p>
+                    <p className={`text-2xl font-bold ${theme === "dark" ? "text-white" : ""}`}>
+                      {usageData.endpoints?.length || 3}
+                    </p>
                   </div>
                   <div className="text-2xl">⚡</div>
                 </div>
               </CardContent>
             </Card>
 
-            <Card>
+            <Card className={theme === "dark" ? "bg-gray-800 border-gray-700" : "bg-white border-gray-200"}>
               <CardContent className="p-4">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm text-gray-500">Avg Daily</p>
-                    <p className="text-2xl font-bold">
-                      {(
-                        usageData.daily?.reduce((sum, d) => sum + d.total, 0) /
-                        Math.max(usageData.daily?.length || 1, 1)
-                      )?.toFixed(1) || 0}
+                    <p className={`text-sm ${theme === "dark" ? "text-gray-400" : "text-gray-500"}`}>Plan</p>
+                    <p className={`text-lg font-bold ${theme === "dark" ? "text-white" : ""}`}>
+                      {usage?.currentPlan || "Free"}
                     </p>
                   </div>
-                  <div className="text-2xl">📈</div>
+                  <div className="text-2xl">💎</div>
                 </div>
               </CardContent>
             </Card>
@@ -641,62 +661,77 @@ const APIManagement = () => {
         </TabsContent>
 
         <TabsContent value="usage" className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <Card>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <Card className={theme === "dark" ? "bg-gray-800 border-gray-700" : "bg-white border-gray-200"}>
               <CardHeader>
-                <CardTitle className="flex items-center gap-2">
+                <CardTitle className={`flex items-center gap-2 ${theme === "dark" ? "text-white" : ""}`}>
                   <div className="w-3 h-3 bg-pink-500 rounded-full"></div>
-                  Audio Generation
+                  API Calls
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="space-y-2">
-                  <div className="flex justify-between text-sm">
+                  <div className={`flex justify-between text-sm ${theme === "dark" ? "text-gray-300" : ""}`}>
                     <span>This Month</span>
-                    <span>45 / 1000 minutes</span>
+                    <span>
+                      {usage?.apiCalls?.used || 0} / {usage?.apiCalls?.limit || 10000} calls
+                    </span>
                   </div>
                   <div className={`w-full ${theme === "dark" ? "bg-gray-700" : "bg-gray-200"} rounded-full h-2`}>
-                    <div className="bg-pink-500 h-2 rounded-full" style={{ width: "4.5%" }}></div>
+                    <div
+                      className="bg-pink-500 h-2 rounded-full"
+                      style={{ width: `${usage?.apiCalls?.percentage || 0}%` }}
+                    ></div>
                   </div>
                 </div>
               </CardContent>
             </Card>
 
-            <Card>
+            <Card className={theme === "dark" ? "bg-gray-800 border-gray-700" : "bg-white border-gray-200"}>
               <CardHeader>
-                <CardTitle className="flex items-center gap-2">
+                <CardTitle className={`flex items-center gap-2 ${theme === "dark" ? "text-white" : ""}`}>
                   <div className="w-3 h-3 bg-purple-500 rounded-full"></div>
                   Video Generation
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="space-y-2">
-                  <div className="flex justify-between text-sm">
+                  <div className={`flex justify-between text-sm ${theme === "dark" ? "text-gray-300" : ""}`}>
                     <span>This Month</span>
-                    <span>12 / 500 minutes</span>
+                    <span>
+                      {usage?.videoGeneration?.used || 0} / {usage?.videoGeneration?.limit || 500} minutes
+                    </span>
                   </div>
                   <div className={`w-full ${theme === "dark" ? "bg-gray-700" : "bg-gray-200"} rounded-full h-2`}>
-                    <div className="bg-purple-500 h-2 rounded-full" style={{ width: "2.4%" }}></div>
+                    <div
+                      className="bg-purple-500 h-2 rounded-full"
+                      style={{ width: `${usage?.videoGeneration?.percentage || 0}%` }}
+                    ></div>
                   </div>
                 </div>
               </CardContent>
             </Card>
 
-            <Card>
+            <Card className={theme === "dark" ? "bg-gray-800 border-gray-700" : "bg-white border-gray-200"}>
               <CardHeader>
-                <CardTitle className="flex items-center gap-2">
+                <CardTitle className={`flex items-center gap-2 ${theme === "dark" ? "text-white" : ""}`}>
                   <div className="w-3 h-3 bg-pink-400 rounded-full"></div>
                   Avatar Creation
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="space-y-2">
-                  <div className="flex justify-between text-sm">
+                  <div className={`flex justify-between text-sm ${theme === "dark" ? "text-gray-300" : ""}`}>
                     <span>This Month</span>
-                    <span>3 / 10 avatars</span>
+                    <span>
+                      {usage?.avatarCreation?.used || 0} / {usage?.avatarCreation?.limit || 10} avatars
+                    </span>
                   </div>
                   <div className={`w-full ${theme === "dark" ? "bg-gray-700" : "bg-gray-200"} rounded-full h-2`}>
-                    <div className="bg-pink-400 h-2 rounded-full" style={{ width: "30%" }}></div>
+                    <div
+                      className="bg-pink-400 h-2 rounded-full"
+                      style={{ width: `${usage?.avatarCreation?.percentage || 0}%` }}
+                    ></div>
                   </div>
                 </div>
               </CardContent>
