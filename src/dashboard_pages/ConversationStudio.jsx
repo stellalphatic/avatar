@@ -501,80 +501,154 @@ const ConversationStudio = () => {
 
   // Handle video message
   const handleVideoMessage = async (event) => {
-    if (typeof event.data === "string") {
-      const data = JSON.parse(event.data)
-      console.log("Video message:", data)
+    try {
+      if (typeof event.data === "string") {
+        const data = JSON.parse(event.data)
+        console.log("[VIDEO_CHAT] Received:", data.type)
 
-      switch (data.type) {
-        case "connecting":
-          setConnectionStatus(data.message)
-          break
-        case "ready":
-          setIsConnected(true)
-          setIsConnecting(false)
-          setConnectionStatus("")
-          setMessages((prev) => [...prev, { type: "system", text: data.message }])
-          startSpeechRecognition()
-          break
-        case "llm_response_text":
-          setMessages((prev) => [...prev, { type: "avatar", text: data.text }])
-          break
-        case "speech_start":
-          setIsSpeaking(true)
-          break
-        case "speech_end":
-          setIsSpeaking(false)
-          break
-        case "video_frame":
-          // Handle video frame
-          if (data.frame) {
-            displayVideoFrame(data.frame)
-          }
-          break
-        case "error":
-          setError(data.message)
-          setIsConnecting(false)
-          setConnectionStatus("")
-          break
-      }
-    } else if (event.data instanceof ArrayBuffer) {
-      // Handle binary data - could be video frame or audio
-      if (event.data.byteLength > 50000) {
-        // Likely video frame (larger size)
-        displayVideoFrame(event.data)
-      } else if (event.data.byteLength > 0) {
-        // Likely audio data - add to queue like your old code
-        audioQueueRef.current.push(event.data)
-        if (!isSpeaking && audioQueueRef.current.length === 1) {
-          playNextAudioChunk()
+        switch (data.type) {
+          case "connecting":
+            setConnectionStatus(data.message)
+            break
+
+          case "ready":
+            setIsConnected(true)
+            setIsConnecting(false)
+            setConnectionStatus("")
+            setMessages((prev) => [...prev, { type: "system", text: data.message }])
+
+            if (!isMuted) {
+              setTimeout(() => startSpeechRecognition(), 1000)
+            }
+            break
+
+          case "llm_response_text":
+            setMessages((prev) => [...prev, { type: "avatar", text: data.text }])
+            break
+
+          case "speech_start":
+            setIsSpeaking(true)
+            if (isListening && recognition) {
+              recognition.stop()
+              setIsListening(false)
+            }
+            break
+
+          case "speech_end":
+            setIsSpeaking(false)
+            if (isConnected && !isMuted && !isSpeaking) {
+              setTimeout(() => startSpeechRecognition(), 500)
+            }
+            break
+
+          case "video_disconnected":
+            setError("Video service disconnected - switching to audio only")
+            break
+
+          case "error":
+            console.error("[VIDEO_CHAT] Error:", data.message)
+            setError(data.message)
+            setIsConnecting(false)
+            setConnectionStatus("")
+            break
         }
       }
+      else if (event.data instanceof ArrayBuffer && event.data.byteLength > 0) {
+        // Handle binary data (audio/video)
+        const dataBuffer = event.data
+
+        // Check if data has header byte for type identification
+        if (dataBuffer.byteLength > 1) {
+          const headerView = new Uint8Array(dataBuffer, 0, 1)
+          const headerByte = headerView[0]
+          const payload = dataBuffer.slice(1)
+
+          if (headerByte === 0x01 && payload.byteLength > 0) {
+            // Audio data - add to queue for playback
+            audioQueueRef.current.push(payload)
+            if (!isSpeaking && audioQueueRef.current.length === 1) {
+              playNextAudioChunk()
+            }
+          } else if (headerByte === 0x02 && payload.byteLength > 0) {
+            // Video frame data - display immediately
+            displayVideoFrame(payload)
+          } else {
+            console.warn("[VIDEO_CHAT] Unknown header byte:", headerByte)
+          }
+        } else {
+          // Fallback for headerless data - use size heuristic
+          if (dataBuffer.byteLength > 10000) {
+            // Large data likely video frame
+            displayVideoFrame(dataBuffer)
+          } else if (dataBuffer.byteLength > 100) {
+            // Smaller data likely audio chunk
+            audioQueueRef.current.push(dataBuffer)
+            if (!isSpeaking && audioQueueRef.current.length === 1) {
+              playNextAudioChunk()
+            }
+          }
+        }
+      }
+    } catch (error) {
+      console.error("[VIDEO_CHAT] Error handling message:", error)
+      // Don't set error for every processing issue to avoid spam
     }
   }
 
-  // Display video frame
+  // Fixed displayVideoFrame function
   const displayVideoFrame = (frameData) => {
-    if (videoRef.current) {
-      let blob
-      if (frameData instanceof ArrayBuffer) {
-        blob = new Blob([frameData], { type: "image/jpeg" })
-      } else if (typeof frameData === "string") {
-        // Base64 encoded image
-        const binaryString = atob(frameData)
-        const bytes = new Uint8Array(binaryString.length)
-        for (let i = 0; i < binaryString.length; i++) {
-          bytes[i] = binaryString.charCodeAt(i)
+    if (!videoRef.current || !frameData || frameData.byteLength === 0) {
+      return
+    }
+
+    try {
+      // Clean up previous URL to prevent memory leaks
+      if (videoRef.current.src && videoRef.current.src.startsWith("blob:")) {
+        URL.revokeObjectURL(videoRef.current.src)
+      }
+
+      // Create blob from frame data
+      const blob = new Blob([frameData], { type: "image/jpeg" })
+      const url = URL.createObjectURL(blob)
+
+      // Create a new image element to test the frame first
+      const testImg = new Image()
+
+      testImg.onload = () => {
+        // Frame is valid, update the video display
+        if (videoRef.current) {
+          videoRef.current.src = url
+          videoRef.current.onload = () => {
+            // Clean up URL after a short delay
+            setTimeout(() => {
+              try {
+                URL.revokeObjectURL(url)
+              } catch (e) {
+                // Ignore cleanup errors
+              }
+            }, 100)
+          }
+        } else {
+          // Clean up if videoRef is no longer available
+          URL.revokeObjectURL(url)
         }
-        blob = new Blob([bytes], { type: "image/jpeg" })
       }
 
-      if (blob) {
-        const url = URL.createObjectURL(blob)
-        videoRef.current.src = url
+      testImg.onerror = () => {
+        console.warn("[VIDEO_CHAT] Invalid video frame received")
+        URL.revokeObjectURL(url)
 
-        // Clean up previous URL after a short delay
-        setTimeout(() => URL.revokeObjectURL(url), 100)
+        // Request keyframe on invalid frame
+        if (videoCallWs && videoCallWs.readyState === WebSocket.OPEN) {
+          videoCallWs.send(JSON.stringify({ type: "request_keyframe" }))
+        }
       }
+
+      // Test the blob by loading it
+      testImg.src = url
+
+    } catch (error) {
+      console.error("[VIDEO_CHAT] Error displaying video frame:", error)
     }
   }
 
@@ -817,22 +891,20 @@ const ConversationStudio = () => {
             <div className="flex space-x-2">
               <button
                 onClick={() => setConversationType("voice")}
-                className={`flex-1 flex items-center justify-center space-x-2 py-2 px-4 rounded-lg transition-colors ${
-                  conversationType === "voice"
+                className={`flex-1 flex items-center justify-center space-x-2 py-2 px-4 rounded-lg transition-colors ${conversationType === "voice"
                     ? "bg-gradient-to-r from-purple-500 to-pink-500 text-white"
                     : `${theme === "dark" ? "bg-gray-700 text-gray-300 hover:bg-gray-600" : "bg-gray-200 text-gray-700 hover:bg-gray-300"}`
-                }`}
+                  }`}
               >
                 <Phone size={16} />
                 <span>Voice</span>
               </button>
               <button
                 onClick={() => setConversationType("video")}
-                className={`flex-1 flex items-center justify-center space-x-2 py-2 px-4 rounded-lg transition-colors ${
-                  conversationType === "video"
+                className={`flex-1 flex items-center justify-center space-x-2 py-2 px-4 rounded-lg transition-colors ${conversationType === "video"
                     ? "bg-gradient-to-r from-purple-500 to-pink-500 text-white"
                     : `${theme === "dark" ? "bg-gray-700 text-gray-300 hover:bg-gray-600" : "bg-gray-200 text-gray-700 hover:bg-gray-300"}`
-                }`}
+                  }`}
               >
                 <Video size={16} />
                 <span>Video</span>
@@ -927,11 +999,10 @@ const ConversationStudio = () => {
         <button
           onClick={isConnected ? endConversation : startConversation}
           disabled={isConnecting || !selectedAvatar || (!canStartConversation() && !isConnected)}
-          className={`w-full py-4 rounded-xl font-bold text-lg transition-all duration-300 transform active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed ${
-            isConnected
+          className={`w-full py-4 rounded-xl font-bold text-lg transition-all duration-300 transform active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed ${isConnected
               ? "bg-gradient-to-r from-red-500 to-red-600 text-white hover:from-red-600 hover:to-red-700"
               : "bg-gradient-to-r from-purple-500 to-pink-500 text-white hover:from-purple-600 hover:to-pink-600"
-          }`}
+            }`}
         >
           {isConnecting ? (
             <div className="flex items-center justify-center space-x-2">
@@ -962,15 +1033,26 @@ const ConversationStudio = () => {
             <div className="relative h-full min-h-[400px]">
               {conversationType === "video" ? (
                 <div className="relative w-full h-full bg-black rounded-xl overflow-hidden">
-                  <img ref={videoRef} className="w-full h-full object-cover" alt="Avatar video" />
+                  <img
+                    ref={videoRef}
+                    className="w-full h-full object-cover"
+                    alt="Avatar video"
+                    style={{ minHeight: '400px' }}
+                    onError={(e) => {
+                      console.warn("[VIDEO_CHAT] Video display error")
+                      // Request keyframe on display error
+                      if (videoCallWs && videoCallWs.readyState === WebSocket.OPEN) {
+                        videoCallWs.send(JSON.stringify({ type: "request_keyframe" }))
+                      }
+                    }}
+                  />
 
                   {/* Call Controls Overlay */}
                   <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 flex items-center space-x-4 bg-black bg-opacity-50 rounded-full px-6 py-3">
                     <button
                       onClick={toggleMute}
-                      className={`p-3 rounded-full transition-colors ${
-                        isMuted ? "bg-red-500 text-white" : "bg-gray-700 text-gray-300 hover:bg-gray-600"
-                      }`}
+                      className={`p-3 rounded-full transition-colors ${isMuted ? "bg-red-500 text-white" : "bg-gray-700 text-gray-300 hover:bg-gray-600"
+                        }`}
                     >
                       {isMuted ? <MicOff size={20} /> : <Mic size={20} />}
                     </button>
@@ -979,9 +1061,8 @@ const ConversationStudio = () => {
 
                     <button
                       onClick={() => setIsVideoEnabled(!isVideoEnabled)}
-                      className={`p-3 rounded-full transition-colors ${
-                        !isVideoEnabled ? "bg-red-500 text-white" : "bg-gray-700 text-gray-300 hover:bg-gray-600"
-                      }`}
+                      className={`p-3 rounded-full transition-colors ${!isVideoEnabled ? "bg-red-500 text-white" : "bg-gray-700 text-gray-300 hover:bg-gray-600"
+                        }`}
                     >
                       {isVideoEnabled ? <Video size={20} /> : <VideoOff size={20} />}
                     </button>
@@ -1026,9 +1107,8 @@ const ConversationStudio = () => {
                   <div className="flex items-center space-x-4 mt-6 bg-black bg-opacity-50 rounded-full px-6 py-3">
                     <button
                       onClick={toggleMute}
-                      className={`p-3 rounded-full transition-colors ${
-                        isMuted ? "bg-red-500 text-white" : "bg-gray-700 text-gray-300 hover:bg-gray-600"
-                      }`}
+                      className={`p-3 rounded-full transition-colors ${isMuted ? "bg-red-500 text-white" : "bg-gray-700 text-gray-300 hover:bg-gray-600"
+                        }`}
                     >
                       {isMuted ? <MicOff size={20} /> : <Mic size={20} />}
                     </button>
@@ -1084,13 +1164,12 @@ const ConversationStudio = () => {
               {messages.map((message, index) => (
                 <div key={index} className={`flex ${message.type === "user" ? "justify-end" : "justify-start"}`}>
                   <div
-                    className={`max-w-xs px-3 py-2 rounded-lg text-sm ${
-                      message.type === "user"
+                    className={`max-w-xs px-3 py-2 rounded-lg text-sm ${message.type === "user"
                         ? "bg-purple-500 text-white"
                         : message.type === "avatar"
                           ? `${theme === "dark" ? "bg-gray-700 text-gray-200" : "bg-gray-200 text-gray-800"}`
                           : "bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-400"
-                    }`}
+                      }`}
                   >
                     {message.text}
                   </div>
