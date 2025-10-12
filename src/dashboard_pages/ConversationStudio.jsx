@@ -26,9 +26,13 @@ import {
 import { motion, AnimatePresence } from "framer-motion"
 
 // WebSocket connections
-let voiceCallWs = null
-let videoCallWs = null
-let recognition = null
+// let voiceCallWs = null
+// let videoCallWs= null
+// let recognition = null
+
+const voiceCallWsRef = useRef(null)
+const videoCallWsRef = useRef(null)
+const recognitionRef = useRef(null)
 
 const SUPPORTED_LANGUAGES = [
   { code: "en", name: "English" },
@@ -307,9 +311,9 @@ const ConversationStudio = () => {
       setIsSpeaking(true);
 
       // Pause user mic if avatar starts speaking
-      if (isListening && recognition) {
+      if (isListening && recognitionRef.current) {
         console.log("Avatar is speaking, pausing user microphone.");
-        recognition.stop();
+        recognitionRef.current.stop();
         setIsListening(false);
       }
 
@@ -322,7 +326,7 @@ const ConversationStudio = () => {
           console.log("Avatar finished speaking all queued audio.");
           setIsSpeaking(false);
           // Re-enable microphone if in an active call
-          if (isConnected && !isListening && recognition && !isMuted) {
+          if (isConnected && !isListening && recognitionRef.current && !isMuted) {
             console.log("Re-enabling microphone for user input after avatar spoke.");
             startSpeechRecognition();
           }
@@ -334,7 +338,7 @@ const ConversationStudio = () => {
       setIsSpeaking(false);
       audioQueueRef.current = [];
       nextPlayTimeRef.current = audioContextRef.current.currentTime;
-      if (isConnected && !isListening && recognition && !isMuted) {
+      if (isConnected && !isListening && recognitionRef.current && !isMuted) {
         startSpeechRecognition();
       }
     }
@@ -421,33 +425,33 @@ const ConversationStudio = () => {
         const wsUrl = `${backendWsUrl}/voice-chat?token=${session.access_token}&avatarId=${selectedAvatar.id}&language=${language}`
         console.log("Connecting to voice WebSocket:", wsUrl)
 
-        voiceCallWs = new WebSocket(wsUrl)
-        voiceCallWs.binaryType = "arraybuffer"
+        voiceCallWsRef.current = new WebSocket(wsUrl)
+        voiceCallWsRef.current.binaryType = "arraybuffer"
 
-        voiceCallWs.onopen = () => {
+        voiceCallWsRef.current.onopen = () => {
           console.log("Voice chat WebSocket opened")
           setConnectionStatus("Connecting to voice service...")
         }
 
-        voiceCallWs.onmessage = handleVoiceMessage
-        voiceCallWs.onclose = handleDisconnect
-        voiceCallWs.onerror = handleError
+        voiceCallWsRef.current.onmessage = handleVoiceMessage
+        voiceCallWsRef.current.onclose = handleDisconnect
+        voiceCallWsRef.current.onerror = handleError
       } else {
         // Start video conversation
         const wsUrl = `${backendWsUrl}/video-chat?token=${session.access_token}&avatarId=${selectedAvatar.id}&language=${language}`
         console.log("Connecting to video WebSocket:", wsUrl)
 
-        videoCallWs = new WebSocket(wsUrl)
-        videoCallWs.binaryType = "arraybuffer"
+        videoCallWsRef.current = new WebSocket(wsUrl)
+        videoCallWsRef.current.binaryType = "arraybuffer"
 
-        videoCallWs.onopen = () => {
+        videoCallWsRef.current.onopen = () => {
           console.log("Video chat WebSocket opened")
           setConnectionStatus("Connecting to video and voice services...")
         }
 
-        videoCallWs.onmessage = handleVideoMessage
-        videoCallWs.onclose = handleDisconnect
-        videoCallWs.onerror = handleError
+        videoCallWsRef.current.onmessage = handleVideoMessage
+        videoCallWsRef.current.onclose = handleDisconnect
+        videoCallWsRef.current.onerror = handleError
       }
     } catch (error) {
       console.error("Error starting conversation:", error)
@@ -529,8 +533,8 @@ const ConversationStudio = () => {
 
           case "speech_start":
             setIsSpeaking(true);
-            if (isListening && recognition) {
-              recognition.stop();
+            if (isListening && recognitionRef.current) {
+              recognitionRef.Current.stop();
               setIsListening(false);
             }
             break;
@@ -584,28 +588,26 @@ const ConversationStudio = () => {
     }
 
     try {
-      // Clean up previous URL to prevent memory leaks
-      if (videoRef.current.src && videoRef.current.src.startsWith("blob:")) {
-        URL.revokeObjectURL(videoRef.current.src);
-      }
-
-      // MuseTalk sends JPEG frames - create blob and display
+      // Create blob from JPEG frame data
       const blob = new Blob([frameData], { type: "image/jpeg" });
       const url = URL.createObjectURL(blob);
 
-      // Update the image source
+      // Clean up previous URL BEFORE setting new one
+      const oldUrl = videoRef.current.src;
+
+      // Force browser to update by setting src directly
       videoRef.current.src = url;
 
-      // Schedule cleanup
-      videoRef.current.onload = () => {
+      // Clean up old URL after new one is set
+      if (oldUrl && oldUrl.startsWith("blob:")) {
         setTimeout(() => {
           try {
-            URL.revokeObjectURL(url);
+            URL.revokeObjectURL(oldUrl);
           } catch (e) {
             // Ignore cleanup errors
           }
-        }, 100);
-      };
+        }, 50);
+      }
 
     } catch (error) {
       console.error("[VIDEO_CHAT] Error displaying video frame:", error);
@@ -619,22 +621,22 @@ const ConversationStudio = () => {
       return
     }
 
-    if (recognition) {
-      recognition.stop()
-      recognition = null
+    if (recognitionRef.current) {
+      recognitionRef.current.stop()
+      recognitionRef.current = null
     }
 
-    recognition = new window.webkitSpeechRecognition()
-    recognition.continuous = true
-    recognition.interimResults = true
-    recognition.lang = language
+    recognitionRef.current = new window.webkitSpeechRecognition()
+    recognitionRef.current.continuous = true
+    recognitionRef.current.interimResults = true
+    recognitionRef.current.lang = language
 
-    recognition.onstart = () => {
+    recognitionRef.current.onstart = () => {
       console.log("Speech recognition started")
       setIsListening(true)
     }
 
-    recognition.onresult = (event) => {
+    recognitionRef.current.onresult = (event) => {
       let finalTranscript = ""
       for (let i = event.resultIndex; i < event.results.length; i++) {
         if (event.results[i].isFinal) {
@@ -644,25 +646,41 @@ const ConversationStudio = () => {
 
       if (finalTranscript) {
         console.log("User said:", finalTranscript)
-        lastUserActivityRef.current = Date.now() // Update activity timestamp
+        lastUserActivityRef.current = Date.now()
         setMessages((prev) => [...prev, { type: "user", text: finalTranscript }])
 
         // Send to appropriate WebSocket
-        const ws = conversationType === "voice" ? voiceCallWs : videoCallWs
+        const ws = conversationType === "voice" ? voiceCallWsRef.current : videoCallWsRef.current
+
+        // ADD THIS DEBUG LOG
+        console.log("[DEBUG] Sending to WebSocket:", {
+          wsExists: !!ws,
+          wsState: ws?.readyState,
+          conversationType: conversationType,
+          message: finalTranscript
+        })
+
         if (ws && ws.readyState === WebSocket.OPEN) {
-          ws.send(JSON.stringify({ type: "user_text", text: finalTranscript }))
+          const message = JSON.stringify({ type: "user_text", text: finalTranscript })
+          console.log("[DEBUG] Sending message:", message) // DEBUGGING
+          ws.send(message)
+        } else {
+          console.error("[DEBUG] WebSocket not ready!", {
+            wsExists: !!ws,
+            wsState: ws?.readyState
+          })
         }
       }
     }
 
-    recognition.onerror = (event) => {
+    recognitionRef.current.onerror = (event) => {
       console.error("Speech recognition error:", event.error)
       if (event.error !== "no-speech" && event.error !== "aborted") {
         setError(`Speech recognition error: ${event.error}`)
       }
     }
 
-    recognition.onend = () => {
+    recognitionRef.current.onend = () => {
       console.log("Speech recognition ended")
       setIsListening(false)
 
@@ -683,7 +701,7 @@ const ConversationStudio = () => {
     }
 
     try {
-      recognition.start()
+      recognitionRef.current.start()
     } catch (error) {
       console.error("Failed to start speech recognition:", error)
     }
@@ -723,9 +741,9 @@ const ConversationStudio = () => {
       inactivityTimeoutRef.current = null
     }
 
-    if (recognition) {
-      recognition.stop()
-      recognition = null
+    if (recognitionRef.current) {
+      recognitionRef.current.stop()
+      recognitionRef.current = null
     }
 
     // Calculate conversation duration and update usage
@@ -744,13 +762,13 @@ const ConversationStudio = () => {
 
   // End conversation
   const endConversation = () => {
-    if (voiceCallWs) {
-      voiceCallWs.close()
-      voiceCallWs = null
+    if (voiceCallWsRef.current) {
+      voiceCallWsRef.current.close()
+      voiceCallWsRef.current = null
     }
-    if (videoCallWs) {
-      videoCallWs.close()
-      videoCallWs = null
+    if (videoCallWsRef.current) {
+      videoCallWsRef.current.close()
+      videoCallWsRef.current = null
     }
     handleDisconnect()
   }
@@ -760,10 +778,10 @@ const ConversationStudio = () => {
     const newMutedState = !isMuted
     setIsMuted(newMutedState)
 
-    if (recognition) {
+    if (recognitionRef.current) {
       if (newMutedState) {
         // Mute - stop recognition
-        recognition.stop()
+        recognitionRef.current.stop()
         setIsListening(false)
       } else {
         // Unmute - restart recognition if connected
