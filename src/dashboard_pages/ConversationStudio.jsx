@@ -277,74 +277,75 @@ const ConversationStudio = () => {
     }
   }, [isConnected])
 
-  // Audio playback function (based on your old code)
+  // Audio playback function 
   const playNextAudioChunk = async () => {
     if (!audioContextRef.current || audioQueueRef.current.length === 0) {
-      return
+      return;
     }
 
-    // Only proceed if not currently playing or if currentSourceNode has finished
+    // Only proceed if not currently playing
     if (isSpeaking && currentSourceNodeRef.current && audioContextRef.current.currentTime < nextPlayTimeRef.current) {
-      return
+      return;
     }
 
-    const audioChunk = audioQueueRef.current.shift()
+    const audioChunk = audioQueueRef.current.shift();
     try {
-      const audioBuffer = await audioContextRef.current.decodeAudioData(audioChunk)
-      const source = audioContextRef.current.createBufferSource()
-      source.buffer = audioBuffer
-      source.connect(audioContextRef.current.destination)
+      const audioBuffer = await audioContextRef.current.decodeAudioData(audioChunk);
+      const source = audioContextRef.current.createBufferSource();
+      source.buffer = audioBuffer;
+      source.connect(audioContextRef.current.destination);
 
-      const currentTime = audioContextRef.current.currentTime
+      const currentTime = audioContextRef.current.currentTime;
       if (nextPlayTimeRef.current < currentTime) {
-        nextPlayTimeRef.current = currentTime
+        nextPlayTimeRef.current = currentTime;
       }
 
-      source.start(nextPlayTimeRef.current)
-      nextPlayTimeRef.current += audioBuffer.duration
-      currentSourceNodeRef.current = source
+      source.start(nextPlayTimeRef.current);
+      nextPlayTimeRef.current += audioBuffer.duration;
+      currentSourceNodeRef.current = source;
 
-      setIsSpeaking(true)
+      setIsSpeaking(true);
 
       // Pause user mic if avatar starts speaking
       if (isListening && recognition) {
-        console.log("Avatar is speaking, pausing user microphone.")
-        recognition.stop()
-        setIsListening(false)
+        console.log("Avatar is speaking, pausing user microphone.");
+        recognition.stop();
+        setIsListening(false);
       }
 
       source.onended = () => {
-        currentSourceNodeRef.current = null
+        currentSourceNodeRef.current = null;
         if (audioQueueRef.current.length > 0) {
-          playNextAudioChunk()
+          // Recursively play next chunk
+          playNextAudioChunk();
         } else {
-          console.log("Avatar finished speaking all queued audio.")
-          setIsSpeaking(false)
-          // Re-enable microphone if in an active call and not already listening
-          if (isConnected && !isListening && recognition) {
-            console.log("Re-enabling microphone for user input after avatar spoke.")
-            startSpeechRecognition()
+          console.log("Avatar finished speaking all queued audio.");
+          setIsSpeaking(false);
+          // Re-enable microphone if in an active call
+          if (isConnected && !isListening && recognition && !isMuted) {
+            console.log("Re-enabling microphone for user input after avatar spoke.");
+            startSpeechRecognition();
           }
         }
-      }
+      };
     } catch (e) {
-      console.error("Error decoding or playing audio chunk:", e)
-      setError("Error playing avatar's voice. Please try again.")
-      setIsSpeaking(false)
-      audioQueueRef.current = []
-      nextPlayTimeRef.current = audioContextRef.current.currentTime
-      if (isConnected && !isListening && recognition) {
-        startSpeechRecognition()
+      console.error("Error decoding or playing audio chunk:", e);
+      setError("Error playing avatar's voice. Please try again.");
+      setIsSpeaking(false);
+      audioQueueRef.current = [];
+      nextPlayTimeRef.current = audioContextRef.current.currentTime;
+      if (isConnected && !isListening && recognition && !isMuted) {
+        startSpeechRecognition();
       }
     }
-  }
+  };
 
-  // Effect to trigger playback when queue changes (like your old code)
-  useEffect(() => {
-    if (!isSpeaking && audioQueueRef.current.length > 0) {
-      playNextAudioChunk()
-    }
-  }, [audioQueueRef.current.length, isSpeaking])
+  // Effect to trigger playback when queue changes 
+  // useEffect(() => {
+  //   if (!isSpeaking && audioQueueRef.current.length > 0) {
+  //     playNextAudioChunk()
+  //   }
+  // }, [audioQueueRef.current.length, isSpeaking])
 
   // Inactivity timeout - auto-stop after 60 seconds of no user activity
   useEffect(() => {
@@ -503,154 +504,113 @@ const ConversationStudio = () => {
   const handleVideoMessage = async (event) => {
     try {
       if (typeof event.data === "string") {
-        const data = JSON.parse(event.data)
-        console.log("[VIDEO_CHAT] Received:", data.type)
+        const data = JSON.parse(event.data);
+        console.log("[VIDEO_CHAT] Received:", data.type);
 
         switch (data.type) {
           case "connecting":
-            setConnectionStatus(data.message)
-            break
+            setConnectionStatus(data.message);
+            break;
 
           case "ready":
-            setIsConnected(true)
-            setIsConnecting(false)
-            setConnectionStatus("")
-            setMessages((prev) => [...prev, { type: "system", text: data.message }])
+            setIsConnected(true);
+            setIsConnecting(false);
+            setConnectionStatus("");
+            setMessages((prev) => [...prev, { type: "system", text: data.message }]);
 
             if (!isMuted) {
-              setTimeout(() => startSpeechRecognition(), 1000)
+              setTimeout(() => startSpeechRecognition(), 1000);
             }
-            break
+            break;
 
           case "llm_response_text":
-            setMessages((prev) => [...prev, { type: "avatar", text: data.text }])
-            break
+            setMessages((prev) => [...prev, { type: "avatar", text: data.text }]);
+            break;
 
           case "speech_start":
-            setIsSpeaking(true)
+            setIsSpeaking(true);
             if (isListening && recognition) {
-              recognition.stop()
-              setIsListening(false)
+              recognition.stop();
+              setIsListening(false);
             }
-            break
+            break;
 
           case "speech_end":
-            setIsSpeaking(false)
+            setIsSpeaking(false);
             if (isConnected && !isMuted && !isSpeaking) {
-              setTimeout(() => startSpeechRecognition(), 500)
+              setTimeout(() => startSpeechRecognition(), 500);
             }
-            break
+            break;
 
           case "video_disconnected":
-            setError("Video service disconnected - switching to audio only")
-            break
+            setError("Video service disconnected - switching to audio only");
+            break;
 
           case "error":
-            console.error("[VIDEO_CHAT] Error:", data.message)
-            setError(data.message)
-            setIsConnecting(false)
-            setConnectionStatus("")
-            break
+            console.error("[VIDEO_CHAT] Error:", data.message);
+            setError(data.message);
+            setIsConnecting(false);
+            setConnectionStatus("");
+            break;
         }
       }
-      else if (event.data instanceof ArrayBuffer && event.data.byteLength > 0) {
-        // Handle binary data (audio/video)
-        const dataBuffer = event.data
+      else if (event.data instanceof ArrayBuffer && event.data.byteLength > 1) {
+        // Binary data with header byte
+        const dataView = new Uint8Array(event.data);
+        const headerByte = dataView[0];
+        const payload = event.data.slice(1);
 
-        // Check if data has header byte for type identification
-        if (dataBuffer.byteLength > 1) {
-          const headerView = new Uint8Array(dataBuffer, 0, 1)
-          const headerByte = headerView[0]
-          const payload = dataBuffer.slice(1)
-
-          if (headerByte === 0x01 && payload.byteLength > 0) {
-            // Audio data - add to queue for playback
-            audioQueueRef.current.push(payload)
-            if (!isSpeaking && audioQueueRef.current.length === 1) {
-              playNextAudioChunk()
-            }
-          } else if (headerByte === 0x02 && payload.byteLength > 0) {
-            // Video frame data - display immediately
-            displayVideoFrame(payload)
-          } else {
-            console.warn("[VIDEO_CHAT] Unknown header byte:", headerByte)
+        if (headerByte === 0x01 && payload.byteLength > 0) {
+          // Audio data (0x01)
+          audioQueueRef.current.push(payload);
+          if (!isSpeaking && audioQueueRef.current.length === 1) {
+            playNextAudioChunk();
           }
-        } else {
-          // Fallback for headerless data - use size heuristic
-          if (dataBuffer.byteLength > 10000) {
-            // Large data likely video frame
-            displayVideoFrame(dataBuffer)
-          } else if (dataBuffer.byteLength > 100) {
-            // Smaller data likely audio chunk
-            audioQueueRef.current.push(dataBuffer)
-            if (!isSpeaking && audioQueueRef.current.length === 1) {
-              playNextAudioChunk()
-            }
-          }
+        }
+        else if (headerByte === 0x02 && payload.byteLength > 0) {
+          // Video frame data (0x02)
+          displayVideoFrame(payload);
         }
       }
     } catch (error) {
-      console.error("[VIDEO_CHAT] Error handling message:", error)
-      // Don't set error for every processing issue to avoid spam
+      console.error("[VIDEO_CHAT] Error handling message:", error);
     }
-  }
+  };
 
   // Fixed displayVideoFrame function
   const displayVideoFrame = (frameData) => {
     if (!videoRef.current || !frameData || frameData.byteLength === 0) {
-      return
+      return;
     }
 
     try {
       // Clean up previous URL to prevent memory leaks
       if (videoRef.current.src && videoRef.current.src.startsWith("blob:")) {
-        URL.revokeObjectURL(videoRef.current.src)
+        URL.revokeObjectURL(videoRef.current.src);
       }
 
-      // Create blob from frame data
-      const blob = new Blob([frameData], { type: "image/jpeg" })
-      const url = URL.createObjectURL(blob)
+      // MuseTalk sends JPEG frames - create blob and display
+      const blob = new Blob([frameData], { type: "image/jpeg" });
+      const url = URL.createObjectURL(blob);
 
-      // Create a new image element to test the frame first
-      const testImg = new Image()
+      // Update the image source
+      videoRef.current.src = url;
 
-      testImg.onload = () => {
-        // Frame is valid, update the video display
-        if (videoRef.current) {
-          videoRef.current.src = url
-          videoRef.current.onload = () => {
-            // Clean up URL after a short delay
-            setTimeout(() => {
-              try {
-                URL.revokeObjectURL(url)
-              } catch (e) {
-                // Ignore cleanup errors
-              }
-            }, 100)
+      // Schedule cleanup
+      videoRef.current.onload = () => {
+        setTimeout(() => {
+          try {
+            URL.revokeObjectURL(url);
+          } catch (e) {
+            // Ignore cleanup errors
           }
-        } else {
-          // Clean up if videoRef is no longer available
-          URL.revokeObjectURL(url)
-        }
-      }
-
-      testImg.onerror = () => {
-        console.warn("[VIDEO_CHAT] Invalid video frame received")
-        URL.revokeObjectURL(url)
-
-        // Request keyframe on invalid frame
-        if (videoCallWs && videoCallWs.readyState === WebSocket.OPEN) {
-          videoCallWs.send(JSON.stringify({ type: "request_keyframe" }))
-        }
-      }
-
-      // Test the blob by loading it
-      testImg.src = url
+        }, 100);
+      };
 
     } catch (error) {
-      console.error("[VIDEO_CHAT] Error displaying video frame:", error)
+      console.error("[VIDEO_CHAT] Error displaying video frame:", error);
     }
-  }
+  };
 
   // Start speech recognition (based on your old code)
   const startSpeechRecognition = () => {
@@ -892,8 +852,8 @@ const ConversationStudio = () => {
               <button
                 onClick={() => setConversationType("voice")}
                 className={`flex-1 flex items-center justify-center space-x-2 py-2 px-4 rounded-lg transition-colors ${conversationType === "voice"
-                    ? "bg-gradient-to-r from-purple-500 to-pink-500 text-white"
-                    : `${theme === "dark" ? "bg-gray-700 text-gray-300 hover:bg-gray-600" : "bg-gray-200 text-gray-700 hover:bg-gray-300"}`
+                  ? "bg-gradient-to-r from-purple-500 to-pink-500 text-white"
+                  : `${theme === "dark" ? "bg-gray-700 text-gray-300 hover:bg-gray-600" : "bg-gray-200 text-gray-700 hover:bg-gray-300"}`
                   }`}
               >
                 <Phone size={16} />
@@ -902,8 +862,8 @@ const ConversationStudio = () => {
               <button
                 onClick={() => setConversationType("video")}
                 className={`flex-1 flex items-center justify-center space-x-2 py-2 px-4 rounded-lg transition-colors ${conversationType === "video"
-                    ? "bg-gradient-to-r from-purple-500 to-pink-500 text-white"
-                    : `${theme === "dark" ? "bg-gray-700 text-gray-300 hover:bg-gray-600" : "bg-gray-200 text-gray-700 hover:bg-gray-300"}`
+                  ? "bg-gradient-to-r from-purple-500 to-pink-500 text-white"
+                  : `${theme === "dark" ? "bg-gray-700 text-gray-300 hover:bg-gray-600" : "bg-gray-200 text-gray-700 hover:bg-gray-300"}`
                   }`}
               >
                 <Video size={16} />
@@ -1000,8 +960,8 @@ const ConversationStudio = () => {
           onClick={isConnected ? endConversation : startConversation}
           disabled={isConnecting || !selectedAvatar || (!canStartConversation() && !isConnected)}
           className={`w-full py-4 rounded-xl font-bold text-lg transition-all duration-300 transform active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed ${isConnected
-              ? "bg-gradient-to-r from-red-500 to-red-600 text-white hover:from-red-600 hover:to-red-700"
-              : "bg-gradient-to-r from-purple-500 to-pink-500 text-white hover:from-purple-600 hover:to-pink-600"
+            ? "bg-gradient-to-r from-red-500 to-red-600 text-white hover:from-red-600 hover:to-red-700"
+            : "bg-gradient-to-r from-purple-500 to-pink-500 text-white hover:from-purple-600 hover:to-pink-600"
             }`}
         >
           {isConnecting ? (
@@ -1038,13 +998,6 @@ const ConversationStudio = () => {
                     className="w-full h-full object-cover"
                     alt="Avatar video"
                     style={{ minHeight: '400px' }}
-                    onError={(e) => {
-                      console.warn("[VIDEO_CHAT] Video display error")
-                      // Request keyframe on display error
-                      if (videoCallWs && videoCallWs.readyState === WebSocket.OPEN) {
-                        videoCallWs.send(JSON.stringify({ type: "request_keyframe" }))
-                      }
-                    }}
                   />
 
                   {/* Call Controls Overlay */}
@@ -1070,11 +1023,12 @@ const ConversationStudio = () => {
 
                   {/* Speaking Indicator */}
                   {isSpeaking && (
-                    <div className="absolute top-4 left-4 flex items-center space-x-2 bg-green-500 text-white px-3 py-1 rounded-full">
+                    <div className="absolute top-4 left-4 flex items-center space-x-2 bg-green-500 text-white px-3 py-1 rounded-full animate-pulse">
                       <Volume2 size={16} />
-                      <span className="text-sm">Speaking</span>
+                      <span className="text-sm">Avatar Speaking</span>
                     </div>
                   )}
+
 
                   {/* Listening Indicator */}
                   {isListening && !isMuted && (
@@ -1165,10 +1119,10 @@ const ConversationStudio = () => {
                 <div key={index} className={`flex ${message.type === "user" ? "justify-end" : "justify-start"}`}>
                   <div
                     className={`max-w-xs px-3 py-2 rounded-lg text-sm ${message.type === "user"
-                        ? "bg-purple-500 text-white"
-                        : message.type === "avatar"
-                          ? `${theme === "dark" ? "bg-gray-700 text-gray-200" : "bg-gray-200 text-gray-800"}`
-                          : "bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-400"
+                      ? "bg-purple-500 text-white"
+                      : message.type === "avatar"
+                        ? `${theme === "dark" ? "bg-gray-700 text-gray-200" : "bg-gray-200 text-gray-800"}`
+                        : "bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-400"
                       }`}
                   >
                     {message.text}
