@@ -493,7 +493,7 @@ const ConversationStudio = () => {
       // Handle audio data - add to queue like your old code
       if (event.data.byteLength > 0) {
         audioQueueRef.current.push(event.data)
-        if (!isSpeaking && audioQueueRef.current.length === 1) {
+        if (!isSpeaking && audioQueueRef.current.length > 0) {
           playNextAudioChunk()
         }
       }
@@ -563,7 +563,9 @@ const ConversationStudio = () => {
         if (headerByte === 0x01 && payload.byteLength > 0) {
           // Audio data (0x01)
           audioQueueRef.current.push(payload);
-          if (!isSpeaking && audioQueueRef.current.length === 1) {
+          if (!isSpeaking && audioQueueRef.current.length > 0
+            
+          ) {
             playNextAudioChunk();
           }
         }
