@@ -584,27 +584,25 @@ const ConversationStudio = () => {
     }
 
     try {
-      // Create blob from JPEG frame data
-      const blob = new Blob([frameData], { type: "image/jpeg" });
-      const url = URL.createObjectURL(blob);
-
-      // Clean up previous URL BEFORE setting new one
       const oldUrl = videoRef.current.src;
 
-      // Force browser to update by setting src directly
-      videoRef.current.src = url;
+      // Create new blob and object URL
+      const blob = new Blob([frameData], { type: "image/jpeg" });
+      const newUrl = URL.createObjectURL(blob);
 
-      // Clean up old URL after new one is set
+      // Update the image source - this triggers reload
+      videoRef.current.src = newUrl;
+
+      // Clean up old URL after a delay to ensure new image loads
       if (oldUrl && oldUrl.startsWith("blob:")) {
         setTimeout(() => {
           try {
             URL.revokeObjectURL(oldUrl);
           } catch (e) {
-            // Ignore cleanup errors
+            console.error("[VIDEO_CHAT] Error revoking old URL:", e);
           }
-        }, 50);
+        }, 100);
       }
-
     } catch (error) {
       console.error("[VIDEO_CHAT] Error displaying video frame:", error);
     }
