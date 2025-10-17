@@ -563,9 +563,7 @@ const ConversationStudio = () => {
         if (headerByte === 0x01 && payload.byteLength > 0) {
           // Audio data (0x01)
           audioQueueRef.current.push(payload);
-          if (!isSpeaking && audioQueueRef.current.length > 0
-            
-          ) {
+          if (!isSpeaking && audioQueueRef.current.length > 0) {
             playNextAudioChunk();
           }
         }
