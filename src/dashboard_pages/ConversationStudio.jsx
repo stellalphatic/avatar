@@ -280,62 +280,62 @@ const ConversationStudio = () => {
   // Audio playback function 
   const playNextAudioChunk = async () => {
     if (!audioContextRef.current || audioQueueRef.current.length === 0) {
-      return;
+      return
     }
 
     // Only proceed if not currently playing
-    if (isSpeaking && currentSourceNodeRef.current && audioContextRef.current.currentTime < nextPlayTimeRef.current) {
-      return;
+    if (currentSourceNodeRef.current) {
+      return  // Only skip if already playing
     }
 
-    const audioChunk = audioQueueRef.current.shift();
+    const audioChunk = audioQueueRef.current.shift()
     try {
-      const audioBuffer = await audioContextRef.current.decodeAudioData(audioChunk);
-      const source = audioContextRef.current.createBufferSource();
-      source.buffer = audioBuffer;
-      source.connect(audioContextRef.current.destination);
+      const audioBuffer = await audioContextRef.current.decodeAudioData(audioChunk)
+      const source = audioContextRef.current.createBufferSource()
+      source.buffer = audioBuffer
+      source.connect(audioContextRef.current.destination)
 
-      const currentTime = audioContextRef.current.currentTime;
+      const currentTime = audioContextRef.current.currentTime
       if (nextPlayTimeRef.current < currentTime) {
-        nextPlayTimeRef.current = currentTime;
+        nextPlayTimeRef.current = currentTime
       }
 
-      source.start(nextPlayTimeRef.current);
-      nextPlayTimeRef.current += audioBuffer.duration;
-      currentSourceNodeRef.current = source;
+      source.start(nextPlayTimeRef.current)
+      nextPlayTimeRef.current += audioBuffer.duration
+      currentSourceNodeRef.current = source
 
-      setIsSpeaking(true);
+      setIsSpeaking(true)
 
       // Pause user mic if avatar starts speaking
       if (isListening && recognition) {
-        console.log("Avatar is speaking, pausing user microphone.");
-        recognition.stop();
-        setIsListening(false);
+        console.log("[AUDIO] Avatar is speaking, pausing user microphone.")
+        recognition.stop()
+        setIsListening(false)
       }
 
       source.onended = () => {
-        currentSourceNodeRef.current = null;
+        currentSourceNodeRef.current = null
         if (audioQueueRef.current.length > 0) {
-          // Recursively play next chunk
-          playNextAudioChunk();
+          // Recursively play next chunk without blocking
+          setTimeout(() => playNextAudioChunk(), 0)
         } else {
-          console.log("Avatar finished speaking all queued audio.");
-          setIsSpeaking(false);
+          console.log("[AUDIO] Avatar finished speaking all queued audio.")
+          setIsSpeaking(false)
           // Re-enable microphone if in an active call
           if (isConnected && !isListening && recognition && !isMuted) {
-            console.log("Re-enabling microphone for user input after avatar spoke.");
-            startSpeechRecognition();
+            console.log("[AUDIO] Re-enabling microphone for user input after avatar spoke.")
+            startSpeechRecognition()
           }
         }
-      };
+      }
     } catch (e) {
-      console.error("Error decoding or playing audio chunk:", e);
-      setError("Error playing avatar's voice. Please try again.");
-      setIsSpeaking(false);
-      audioQueueRef.current = [];
-      nextPlayTimeRef.current = audioContextRef.current.currentTime;
+      console.error("[AUDIO] Error decoding or playing audio chunk:", e)
+      setError("Error playing avatar's voice. Please try again.")
+      setIsSpeaking(false)
+      audioQueueRef.current = []
+      nextPlayTimeRef.current = audioContextRef.current.currentTime
       if (isConnected && !isListening && recognition && !isMuted) {
-        startSpeechRecognition();
+        startSpeechRecognition()
       }
     }
   };
@@ -504,111 +504,129 @@ const ConversationStudio = () => {
   const handleVideoMessage = async (event) => {
     try {
       if (typeof event.data === "string") {
-        const data = JSON.parse(event.data);
-        console.log("[VIDEO_CHAT] Received:", data.type);
+        const data = JSON.parse(event.data)
+        console.log("[VIDEO_CHAT] Received:", data.type)
 
         switch (data.type) {
           case "connecting":
-            setConnectionStatus(data.message);
-            break;
+            setConnectionStatus(data.message)
+            break
 
           case "ready":
-            setIsConnected(true);
-            setIsConnecting(false);
-            setConnectionStatus("");
-            setMessages((prev) => [...prev, { type: "system", text: data.message }]);
+            setIsConnected(true)
+            setIsConnecting(false)
+            setConnectionStatus("")
+            setMessages((prev) => [...prev, { type: "system", text: data.message }])
 
             if (!isMuted) {
-              setTimeout(() => startSpeechRecognition(), 1000);
+              setTimeout(() => startSpeechRecognition(), 1000)
             }
-            break;
+            break
 
           case "llm_response_text":
-            setMessages((prev) => [...prev, { type: "avatar", text: data.text }]);
-            break;
+            setMessages((prev) => [...prev, { type: "avatar", text: data.text }])
+            break
 
           case "speech_start":
-            setIsSpeaking(true);
+            setIsSpeaking(true)
             if (isListening && recognition) {
-              recognition.stop();
-              setIsListening(false);
+              recognition.stop()
+              setIsListening(false)
             }
-            break;
+            break
 
           case "speech_end":
-            setIsSpeaking(false);
+            setIsSpeaking(false)
             if (isConnected && !isMuted && !isSpeaking) {
-              setTimeout(() => startSpeechRecognition(), 500);
+              setTimeout(() => startSpeechRecognition(), 500)
             }
-            break;
+            break
 
           case "video_disconnected":
-            setError("Video service disconnected - switching to audio only");
-            break;
+            setError("Video service disconnected - switching to audio only")
+            break
 
           case "error":
-            console.error("[VIDEO_CHAT] Error:", data.message);
-            setError(data.message);
-            setIsConnecting(false);
-            setConnectionStatus("");
-            break;
+            console.error("[VIDEO_CHAT] Error:", data.message)
+            setError(data.message)
+            setIsConnecting(false)
+            setConnectionStatus("")
+            break
+
+          default:
+            console.log("[VIDEO_CHAT] Unknown message type:", data.type)
         }
-      }
-      else if (event.data instanceof ArrayBuffer && event.data.byteLength > 1) {
-        // Binary data with header byte
-        const dataView = new Uint8Array(event.data);
-        const headerByte = dataView[0];
-        const payload = event.data.slice(1);
+      } else if (event.data instanceof ArrayBuffer && event.data.byteLength > 1) {
+        const dataView = new Uint8Array(event.data)
+        const headerByte = dataView[0]
+        const payload = event.data.slice(1)
 
         if (headerByte === 0x01 && payload.byteLength > 0) {
           // Audio data (0x01)
-          audioQueueRef.current.push(payload);
+          console.log("[VIDEO_CHAT] Received audio chunk:", payload.byteLength, "bytes")
+          audioQueueRef.current.push(payload)
+          // Trigger playback if not already playing
           if (!isSpeaking && audioQueueRef.current.length > 0) {
-            playNextAudioChunk();
+            playNextAudioChunk()
           }
-        }
-        else if (headerByte === 0x02 && payload.byteLength > 0) {
+        } else if (headerByte === 0x02 && payload.byteLength > 0) {
           // Video frame data (0x02)
-          displayVideoFrame(payload);
+          console.log("[VIDEO_CHAT] Received video frame:", payload.byteLength, "bytes")
+          displayVideoFrame(payload)
+        } else {
+          console.warn("[VIDEO_CHAT] Unknown header byte:", headerByte, "payload size:", payload.byteLength)
         }
       }
     } catch (error) {
-      console.error("[VIDEO_CHAT] Error handling message:", error);
+      console.error("[VIDEO_CHAT] Error handling message:", error)
     }
   };
 
-  // Fixed displayVideoFrame function
   const displayVideoFrame = (frameData) => {
     if (!videoRef.current || !frameData || frameData.byteLength === 0) {
-      return;
+      return
     }
 
     try {
-      const oldUrl = videoRef.current.src;
+      const blob = new Blob([frameData], { type: "image/jpeg" })
+      const newUrl = URL.createObjectURL(blob)
+      const oldUrl = videoRef.current.src
 
-      // Create new blob and object URL
-      const blob = new Blob([frameData], { type: "image/jpeg" });
-      const newUrl = URL.createObjectURL(blob);
+      // Create a temporary image to preload before updating src
+      const tempImg = new Image()
+      tempImg.crossOrigin = "anonymous"
 
-      // Update the image source - this triggers reload
-      videoRef.current.src = newUrl;
+      tempImg.onload = () => {
+        if (videoRef.current) {
+          videoRef.current.src = newUrl
+        }
 
-      // Clean up old URL after a delay to ensure new image loads
-      if (oldUrl && oldUrl.startsWith("blob:")) {
-        setTimeout(() => {
+        // Revoke old URL after new one is successfully loaded
+        if (oldUrl && oldUrl.startsWith("blob:")) {
           try {
-            URL.revokeObjectURL(oldUrl);
+            URL.revokeObjectURL(oldUrl)
           } catch (e) {
-            console.error("[VIDEO_CHAT] Error revoking old URL:", e);
+            // Ignore revocation errors
           }
-        }, 100);
+        }
       }
+
+      tempImg.onerror = () => {
+        console.error("[VIDEO_CHAT] Failed to preload frame, updating anyway")
+        // Still update the src even if preload fails to prevent blocking
+        if (videoRef.current) {
+          videoRef.current.src = newUrl
+        }
+      }
+
+      // Start loading the image
+      tempImg.src = newUrl
     } catch (error) {
-      console.error("[VIDEO_CHAT] Error displaying video frame:", error);
+      console.error("[VIDEO_CHAT] Error displaying video frame:", error)
     }
   };
 
-  // Start speech recognition (based on your old code)
+  // Start speech recognition 
   const startSpeechRecognition = () => {
     if (!("webkitSpeechRecognition" in window)) {
       setError("Speech recognition not supported in this browser")
