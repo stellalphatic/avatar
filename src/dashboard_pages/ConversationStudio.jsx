@@ -584,47 +584,38 @@ const ConversationStudio = () => {
 
   const displayVideoFrame = (frameData) => {
     if (!videoRef.current || !frameData || frameData.byteLength === 0) {
+      console.log("[VIDEO_CHAT] Skipping frame - invalid data")
       return
     }
 
     try {
       const blob = new Blob([frameData], { type: "image/jpeg" })
       const newUrl = URL.createObjectURL(blob)
+
+      // Store the old URL for cleanup
       const oldUrl = videoRef.current.src
 
-      // Create a temporary image to preload before updating src
-      const tempImg = new Image()
-      tempImg.crossOrigin = "anonymous"
+      // Directly update the image source - no preload logic
+      videoRef.current.src = newUrl
 
-      tempImg.onload = () => {
-        if (videoRef.current) {
-          videoRef.current.src = newUrl
-        }
+      console.log("[VIDEO_CHAT] Frame displayed, size:", frameData.byteLength, "bytes")
 
-        // Revoke old URL after new one is successfully loaded
-        if (oldUrl && oldUrl.startsWith("blob:")) {
+      // Revoke old URL after a short delay to ensure it's not being used
+      if (oldUrl && oldUrl.startsWith("blob:")) {
+        setTimeout(() => {
           try {
             URL.revokeObjectURL(oldUrl)
+            console.log("[VIDEO_CHAT] Revoked old blob URL")
           } catch (e) {
-            // Ignore revocation errors
+            console.error("[VIDEO_CHAT] Error revoking URL:", e)
           }
-        }
+        }, 100)
       }
-
-      tempImg.onerror = () => {
-        console.error("[VIDEO_CHAT] Failed to preload frame, updating anyway")
-        // Still update the src even if preload fails to prevent blocking
-        if (videoRef.current) {
-          videoRef.current.src = newUrl
-        }
-      }
-
-      // Start loading the image
-      tempImg.src = newUrl
     } catch (error) {
       console.error("[VIDEO_CHAT] Error displaying video frame:", error)
     }
-  };
+  }
+
 
   // Start speech recognition 
   const startSpeechRecognition = () => {
