@@ -583,7 +583,6 @@ const ConversationStudio = () => {
     }
   };
 
-  // Fixed displayVideoFrame function with proper frame rendering and debugging
   const displayVideoFrame = (frameData) => {
     if (!videoRef.current || !frameData || frameData.byteLength === 0) {
       console.error("[VIDEO_FRAME] Invalid frame data:", {
