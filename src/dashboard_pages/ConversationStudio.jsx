@@ -583,51 +583,45 @@ const ConversationStudio = () => {
     }
   };
 
+  // Fixed displayVideoFrame function with proper frame rendering and debugging
   const displayVideoFrame = (frameData) => {
     if (!videoRef.current || !frameData || frameData.byteLength === 0) {
-      console.log("[VIDEO_CHAT] Skipping frame - invalid data")
-      return
+      console.error("[VIDEO_FRAME] Invalid frame data:", {
+        hasRef: !!videoRef.current,
+        hasData: !!frameData,
+        byteLength: frameData?.byteLength
+      });
+      return;
     }
 
     try {
-      // <CHANGE> Use canvas for immediate pixel-by-pixel rendering instead of img tag
-      const canvas = videoRef.current
-
-      // Initialize canvas context if needed
-      if (!canvasContextRef.current) {
-        canvasContextRef.current = canvas.getContext('2d')
+      frameCountRef.current += 1;
+      
+      // Log every 30 frames
+      if (frameCountRef.current % 30 === 0) {
+        console.log(`[VIDEO_FRAME] Received ${frameCountRef.current} frames`);
       }
-
-      const ctx = canvasContextRef.current
-
-      // Create blob URL and load image
-      const blob = new Blob([frameData], { type: "image/jpeg" })
-      const url = URL.createObjectURL(blob)
-
-      const img = new Image()
-      img.crossOrigin = "anonymous"
-
-      img.onload = () => {
-        // Draw image directly to canvas
-        canvas.width = img.width
-        canvas.height = img.height
-        ctx.drawImage(img, 0, 0)
-
-        // Revoke URL after drawing
-        URL.revokeObjectURL(url)
-        console.log("[VIDEO_CHAT] Frame displayed, size:", frameData.byteLength, "bytes")
-      }
-
-      img.onerror = () => {
-        console.error("[VIDEO_CHAT] Failed to load frame image")
-        URL.revokeObjectURL(url)
-      }
-
-      img.src = url
+      
+      const blob = new Blob([frameData], { type: "image/jpeg" });
+      const newUrl = URL.createObjectURL(blob);
+      
+      // Store old URL for cleanup
+      const oldUrl = videoRef.current.src;
+      
+      // Update image source
+      videoRef.current.onload = () => {
+        // Clean up old URL after new image loads
+        if (oldUrl && oldUrl.startsWith("blob:")) {
+          URL.revokeObjectURL(oldUrl);
+        }
+      };
+      
+      videoRef.current.src = newUrl;
+      
     } catch (error) {
-      console.error("[VIDEO_CHAT] Error displaying video frame:", error)
+      console.error("[VIDEO_FRAME] Error displaying frame:", error);
     }
-  }
+  };
 
 
   // Start speech recognition 
