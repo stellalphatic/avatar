@@ -157,6 +157,7 @@ const ConversationStudio = () => {
 
   // Refs
   const videoRef = useRef(null)
+  const canvasContextRef = useRef(null)
   const audioContextRef = useRef(null)
   const audioQueueRef = useRef([]) // Audio queue like your old code
   const currentSourceNodeRef = useRef(null)
@@ -589,28 +590,40 @@ const ConversationStudio = () => {
     }
 
     try {
-      const blob = new Blob([frameData], { type: "image/jpeg" })
-      const newUrl = URL.createObjectURL(blob)
+      // <CHANGE> Use canvas for immediate pixel-by-pixel rendering instead of img tag
+      const canvas = videoRef.current
 
-      // Store the old URL for cleanup
-      const oldUrl = videoRef.current.src
-
-      // Directly update the image source - no preload logic
-      videoRef.current.src = newUrl
-
-      console.log("[VIDEO_CHAT] Frame displayed, size:", frameData.byteLength, "bytes")
-
-      // Revoke old URL after a short delay to ensure it's not being used
-      if (oldUrl && oldUrl.startsWith("blob:")) {
-        setTimeout(() => {
-          try {
-            URL.revokeObjectURL(oldUrl)
-            console.log("[VIDEO_CHAT] Revoked old blob URL")
-          } catch (e) {
-            console.error("[VIDEO_CHAT] Error revoking URL:", e)
-          }
-        }, 100)
+      // Initialize canvas context if needed
+      if (!canvasContextRef.current) {
+        canvasContextRef.current = canvas.getContext('2d')
       }
+
+      const ctx = canvasContextRef.current
+
+      // Create blob URL and load image
+      const blob = new Blob([frameData], { type: "image/jpeg" })
+      const url = URL.createObjectURL(blob)
+
+      const img = new Image()
+      img.crossOrigin = "anonymous"
+
+      img.onload = () => {
+        // Draw image directly to canvas
+        canvas.width = img.width
+        canvas.height = img.height
+        ctx.drawImage(img, 0, 0)
+
+        // Revoke URL after drawing
+        URL.revokeObjectURL(url)
+        console.log("[VIDEO_CHAT] Frame displayed, size:", frameData.byteLength, "bytes")
+      }
+
+      img.onerror = () => {
+        console.error("[VIDEO_CHAT] Failed to load frame image")
+        URL.revokeObjectURL(url)
+      }
+
+      img.src = url
     } catch (error) {
       console.error("[VIDEO_CHAT] Error displaying video frame:", error)
     }
@@ -753,6 +766,15 @@ const ConversationStudio = () => {
     if (conversationStartTimeRef.current) {
       const durationMinutes = (Date.now() - conversationStartTimeRef.current) / (1000 * 60)
       updateConversationUsage(durationMinutes)
+    }
+
+    // <CHANGE> Clear canvas when disconnecting
+    if (videoRef.current && videoRef.current.tagName === 'CANVAS') {
+      const ctx = canvasContextRef.current
+      if (ctx) {
+        ctx.clearRect(0, 0, videoRef.current.width, videoRef.current.height)
+      }
+      canvasContextRef.current = null
     }
   }
 
@@ -1014,11 +1036,10 @@ const ConversationStudio = () => {
             <div className="relative h-full min-h-[400px]">
               {conversationType === "video" ? (
                 <div className="relative w-full h-full bg-black rounded-xl overflow-hidden">
-                  <img
+                  <canvas
                     ref={videoRef}
-                    className="w-full h-full object-cover"
-                    alt="Avatar video"
-                    style={{ minHeight: '400px' }}
+                    className="w-full h-full"
+                    style={{ minHeight: '400px', display: 'block' }}
                   />
 
                   {/* Call Controls Overlay */}
