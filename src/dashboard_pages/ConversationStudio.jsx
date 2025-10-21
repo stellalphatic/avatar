@@ -157,6 +157,7 @@ const ConversationStudio = () => {
 
   // Refs
   const videoRef = useRef(null)
+  const frameCountRef = useRef(0)
   const canvasContextRef = useRef(null)
   const audioContextRef = useRef(null)
   const audioQueueRef = useRef([]) // Audio queue like your old code
@@ -584,43 +585,40 @@ const ConversationStudio = () => {
   };
 
   const displayVideoFrame = (frameData) => {
-    if (!videoRef.current || !frameData || frameData.byteLength === 0) {
-      console.error("[VIDEO_FRAME] Invalid frame data:", {
-        hasRef: !!videoRef.current,
-        hasData: !!frameData,
-        byteLength: frameData?.byteLength
-      });
-      return;
+  if (!videoRef.current || !frameData || frameData.byteLength === 0) {
+    return
+  }
+
+  try {
+    const canvas = videoRef.current
+    
+    if (!canvasContextRef.current) {
+      canvasContextRef.current = canvas.getContext('2d')
     }
 
-    try {
-      frameCountRef.current += 1;
+    const ctx = canvasContextRef.current
+    const blob = new Blob([frameData], { type: "image/jpeg" })
+    const url = URL.createObjectURL(blob)
+    const img = new Image()
+    
+    img.onload = () => {
+      canvas.width = img.width
+      canvas.height = img.height
+      ctx.drawImage(img, 0, 0)
+      URL.revokeObjectURL(url)
       
-      // Log every 30 frames
+      // Optional logging
+      frameCountRef.current += 1
       if (frameCountRef.current % 30 === 0) {
-        console.log(`[VIDEO_FRAME] Received ${frameCountRef.current} frames`);
+        console.log(`[VIDEO_FRAME] Displayed ${frameCountRef.current} frames`)
       }
-      
-      const blob = new Blob([frameData], { type: "image/jpeg" });
-      const newUrl = URL.createObjectURL(blob);
-      
-      // Store old URL for cleanup
-      const oldUrl = videoRef.current.src;
-      
-      // Update image source
-      videoRef.current.onload = () => {
-        // Clean up old URL after new image loads
-        if (oldUrl && oldUrl.startsWith("blob:")) {
-          URL.revokeObjectURL(oldUrl);
-        }
-      };
-      
-      videoRef.current.src = newUrl;
-      
-    } catch (error) {
-      console.error("[VIDEO_FRAME] Error displaying frame:", error);
     }
-  };
+
+    img.src = url
+  } catch (error) {
+    console.error("[VIDEO_FRAME] Error:", error)
+  }
+}
 
 
   // Start speech recognition 
