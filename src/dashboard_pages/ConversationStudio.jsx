@@ -342,11 +342,11 @@ const ConversationStudio = () => {
   };
 
   // Effect to trigger playback when queue changes 
-  // useEffect(() => {
-  //   if (!isSpeaking && audioQueueRef.current.length > 0) {
-  //     playNextAudioChunk()
-  //   }
-  // }, [audioQueueRef.current.length, isSpeaking])
+  useEffect(() => {
+    if (!isSpeaking && audioQueueRef.current.length > 0 && audioContextRef.current) {
+      playNextAudioChunk()
+    }
+  }, [audioQueueRef.current.length, isSpeaking])
 
   // Inactivity timeout - auto-stop after 60 seconds of no user activity
   useEffect(() => {
