@@ -1,4 +1,4 @@
-import React from 'react';
+
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { AuthProvider } from './contexts/AuthContext';
@@ -17,7 +17,7 @@ import CreateAvatar from './dashboard_pages/CreateAvatar';
 import SettingsPage from './dashboard_pages/SettingsPage'; 
 import VoicesPage from './dashboard_pages/VoicesPage';
 import ChatWithAvatarPage from './dashboard_pages/ConversationStudio';
-import IntegrationsPage from './dashboard_pages/IntegrationsPage';
+// `import IntegrationsPage from './dashboard_pages/IntegrationsPage';
 
 import VideoGenerationPage from './dashboard_pages/VideoGeneration';
 import VideoLibraryPage from './dashboard_pages/VideoLibrary';

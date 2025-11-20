@@ -1,34 +1,25 @@
-"use client"
-
-import { useState, useEffect, useRef } from "react"
-import { useAuth } from "../contexts/AuthContext"
-import { useTheme } from "../contexts/ThemeContext"
-import supabase from "../supabaseClient"
-import { Link } from "react-router-dom"
+import { useState, useEffect } from "react";
+import { useAuth } from "../contexts/AuthContext";
+import { useTheme } from "../contexts/ThemeContext";
+import supabase from "../supabaseClient";
+import { useLiveKitConversation } from "../hooks/useLiveKitConversation";
 import {
-  Video,
-  Phone,
-  VideoOff,
-  Mic,
-  MicOff,
-  Volume2,
-  VolumeX,
-  MessageCircle,
-  Play,
-  Square,
   ChevronDown,
-  X,
-  Search,
-  UserPlus,
   Loader2,
   AlertTriangle,
-} from "lucide-react"
-import { motion, AnimatePresence } from "framer-motion"
+  Info,
+  Clock,
+  FileCode,
+  BookOpen,
+  Settings as SettingsIcon,
+  Book,
+} from "lucide-react";
+import { useNavigate } from "react-router-dom";
 
-// WebSocket connections
-let voiceCallWs = null
-let videoCallWs = null
-let recognition = null
+// Import modals
+import PersonaSelectionModal from "../components/modals/PersonaSelectionModal";
+import AvatarSelectionModal from "../components/modals/AvatarSelectionModal";
+import FullScreenConversation from "../components/FullScreenConversation";
 
 const SUPPORTED_LANGUAGES = [
   { code: "en", name: "English" },
@@ -36,1161 +27,692 @@ const SUPPORTED_LANGUAGES = [
   { code: "es", name: "Spanish" },
   { code: "fr", name: "French" },
   { code: "de", name: "German" },
-  { code: "it", name: "Italian" },
-  { code: "ja", name: "Japanese" },
-  { code: "ko", name: "Korean" },
-  { code: "pt", name: "Portuguese" },
-  { code: "ru", name: "Russian" },
-]
+];
 
-const AvatarModal = ({ isOpen, onClose, onSelect, avatars, theme }) => {
-  const [searchTerm, setSearchTerm] = useState("")
+export default function ConversationStudio() {
+  const { user } = useAuth();
+  const { theme } = useTheme();
+  const navigate = useNavigate();
 
-  const filteredAvatars = avatars.filter((avatar) => avatar.name.toLowerCase().includes(searchTerm.toLowerCase()))
+  // State
+  const [selectedAvatar, setSelectedAvatar] = useState(null);
+  const [selectedPersona, setSelectedPersona] = useState(null);
+  const [avatars, setAvatars] = useState([]);
+  const [personas, setPersonas] = useState([]);
+  const [voices, setVoices] = useState([]);
+  const [showAvatarModal, setShowAvatarModal] = useState(false);
+  const [showPersonaModal, setShowPersonaModal] = useState(false);
+  const [language, setLanguage] = useState("en");
+  const [conversationName, setConversationName] = useState("");
+  const [customGreeting, setCustomGreeting] = useState("");
+  const [conversationContext, setConversationContext] = useState("");
+  const [audioOnly, setAudioOnly] = useState(false);
+  const [usage, setUsage] = useState(null);
+  const [error, setError] = useState("");
+  const [isFullScreen, setIsFullScreen] = useState(false);
 
-  if (!isOpen) return null
+  const {
+    isConnected,
+    isConnecting,
+    connectionStatus,
+    error: livekitError,
+    callDuration,
+    isSpeaking,
+    messages,
+    connect,
+    disconnect,
+    toggleMicrophone,
+    videoElementRef,
+  } = useLiveKitConversation();
 
-  return (
-    <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-4">
-      <motion.div
-        initial={{ opacity: 0, scale: 0.9 }}
-        animate={{ opacity: 1, scale: 1 }}
-        exit={{ opacity: 0, scale: 0.9 }}
-        className={`${theme === "dark" ? "bg-gray-800" : "bg-white"} rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto p-6`}
-      >
-        <div className="flex justify-between items-center mb-4">
-          <h2 className={`text-xl font-bold ${theme === "dark" ? "text-white" : "text-gray-900"}`}>Select an Avatar</h2>
-          <button
-            onClick={onClose}
-            className={`${theme === "dark" ? "text-gray-400 hover:text-white" : "text-gray-600 hover:text-gray-900"} transition-colors`}
-          >
-            <X size={24} />
-          </button>
-        </div>
-
-        <div className="relative mb-6">
-          <input
-            type="text"
-            placeholder="Search by name..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className={`w-full ${theme === "dark" ? "bg-gray-700 text-gray-200" : "bg-gray-100 text-gray-900"} rounded-full py-2 pl-4 pr-10 focus:outline-none focus:ring-2 focus:ring-pink-500 transition-shadow`}
-          />
-          <Search
-            className={`absolute right-3 top-1/2 -translate-y-1/2 ${theme === "dark" ? "text-gray-400" : "text-gray-500"}`}
-            size={20}
-          />
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-          <Link
-            to="/dashboard/avatars/create"
-            className={`${theme === "dark" ? "bg-gray-700 border-gray-500 hover:border-pink-500" : "bg-gray-50 border-gray-300 hover:border-pink-500"} rounded-xl border border-dashed flex items-center justify-center p-6 text-center transition-colors cursor-pointer group`}
-          >
-            <div className="text-center">
-              <UserPlus className="h-8 w-8 mx-auto mb-2 text-pink-500 group-hover:text-pink-600" />
-              <span className="text-pink-500 group-hover:text-pink-600 font-medium">Create Avatar</span>
-            </div>
-          </Link>
-
-          {filteredAvatars.map((avatar) => (
-            <motion.div
-              key={avatar.id}
-              whileHover={{ scale: 1.05 }}
-              onClick={() => onSelect(avatar)}
-              className={`relative ${theme === "dark" ? "bg-gray-700" : "bg-gray-100"} rounded-xl overflow-hidden cursor-pointer group transition-all duration-300 hover:shadow-xl`}
-            >
-              <div className="aspect-square">
-                <img
-                  src={avatar.image_url || "/placeholder.svg"}
-                  alt={avatar.name}
-                  className="w-full h-full object-cover"
-                  onError={(e) => {
-                    e.target.src = `/placeholder.svg?height=300&width=300&text=${encodeURIComponent(avatar.name)}`
-                  }}
-                />
-              </div>
-              <div className="p-4">
-                <h3 className={`${theme === "dark" ? "text-white" : "text-gray-900"} font-semibold text-lg truncate`}>
-                  {avatar.name}
-                </h3>
-                <p className={`text-sm ${theme === "dark" ? "text-gray-400" : "text-gray-600"} truncate`}>
-                  {avatar.persona_role || "Custom Avatar"}
-                </p>
-              </div>
-            </motion.div>
-          ))}
-        </div>
-
-        {filteredAvatars.length === 0 && (
-          <div className="text-center py-12">
-            <p className={`${theme === "dark" ? "text-gray-400" : "text-gray-600"}`}>
-              No avatars found. Create your first avatar!
-            </p>
-          </div>
-        )}
-      </motion.div>
-    </div>
-  )
-}
-
-const ConversationStudio = () => {
-  const { user } = useAuth()
-  const { theme } = useTheme()
-  const [selectedAvatar, setSelectedAvatar] = useState(null)
-  const [avatars, setAvatars] = useState([])
-  const [showAvatarModal, setShowAvatarModal] = useState(false)
-  const [conversationType, setConversationType] = useState("voice") // 'voice' or 'video'
-  const [language, setLanguage] = useState("en")
-  const [duration, setDuration] = useState(5) // minutes
-  const [isConnected, setIsConnected] = useState(false)
-  const [isConnecting, setIsConnecting] = useState(false)
-  const [connectionStatus, setConnectionStatus] = useState("")
-  const [callDuration, setCallDuration] = useState(0)
-  const [isMuted, setIsMuted] = useState(false)
-  const [isVideoEnabled, setIsVideoEnabled] = useState(true)
-  const [isSpeaking, setIsSpeaking] = useState(false)
-  const [isListening, setIsListening] = useState(false)
-  const [messages, setMessages] = useState([])
-  const [usage, setUsage] = useState(null)
-  const [error, setError] = useState("")
-
-  // Refs
-  const videoRef = useRef(null)
-  const frameCountRef = useRef(0)
-  const canvasContextRef = useRef(null)
-  const audioContextRef = useRef(null)
-  const audioQueueRef = useRef([]) // Audio queue like your old code
-  const currentSourceNodeRef = useRef(null)
-  const nextPlayTimeRef = useRef(0)
-  const callTimerRef = useRef(null)
-  const conversationStartTimeRef = useRef(null)
-  const recognitionRestartTimeoutRef = useRef(null)
-  const inactivityTimeoutRef = useRef(null)
-  const lastUserActivityRef = useRef(Date.now())
-
-  // Fetch avatars and usage
+  // Fetch data
   useEffect(() => {
     const fetchData = async () => {
-      if (!user) return
+      if (!user) return;
 
       try {
-        // Fetch avatars
-        const { data: avatarData, error: avatarError } = await supabase
+        const { data: avatarData } = await supabase
           .from("avatars")
           .select("*")
-          .or(`user_id.eq.${user.id},is_public.eq.true`)
-          .order("created_at", { ascending: false })
+          .or(`user_id.eq.${user.id},is_public.eq.true,is_stock.eq.true`)
+          .order("is_stock", { ascending: false });
 
-        if (avatarError) throw avatarError
-        setAvatars(avatarData || [])
+        setAvatars(avatarData || []);
 
-        // Fetch usage
-        await fetchUsageStats()
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+
+        if (session) {
+          const [personaRes, voiceRes, usageRes] = await Promise.all([
+            fetch(`${import.meta.env.VITE_BACKEND_API_URL}/personas`, {
+              headers: { Authorization: `Bearer ${session.access_token}` },
+            }),
+            fetch(`${import.meta.env.VITE_BACKEND_API_URL}/personas/voices`, {
+              headers: { Authorization: `Bearer ${session.access_token}` },
+            }),
+            fetch(`${import.meta.env.VITE_BACKEND_API_URL}/usage/stats`, {
+              headers: { Authorization: `Bearer ${session.access_token}` },
+            }),
+          ]);
+
+          if (personaRes.ok) {
+            const data = await personaRes.json();
+            setPersonas(data.data || []);
+          }
+
+          if (voiceRes.ok) {
+            const data = await voiceRes.json();
+            setVoices(data.data || []);
+          }
+
+          if (usageRes.ok) {
+            const data = await usageRes.json();
+            if (data.success) setUsage(data.data);
+          }
+        }
       } catch (error) {
-        console.error("Error fetching data:", error)
-        setError("Failed to load data")
+        console.error("Error fetching data:", error);
+        setError("Failed to load data. Please refresh the page.");
       }
-    }
+    };
 
-    fetchData()
-  }, [user])
+    fetchData();
+  }, [user]);
 
-  const fetchUsageStats = async () => {
-    if (!user) return
-
-    try {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession()
-
-      if (session) {
-        const response = await fetch(`${import.meta.env.VITE_BACKEND_API_URL}/usage/stats`, {
-          headers: {
-            Authorization: `Bearer ${session.access_token}`,
-          },
-        })
-
-        if (response.ok) {
-          const result = await response.json()
-          if (result.success) {
-            setUsage(result.data)
-          }
-        }
-      }
-    } catch (error) {
-      console.error("Error fetching usage stats:", error)
-    }
-  }
-
-  // Call timer
-  useEffect(() => {
-    if (isConnected) {
-      conversationStartTimeRef.current = Date.now()
-      callTimerRef.current = setInterval(() => {
-        const elapsed = Math.floor((Date.now() - conversationStartTimeRef.current) / 1000)
-        setCallDuration(elapsed)
-      }, 1000)
-    } else {
-      if (callTimerRef.current) {
-        clearInterval(callTimerRef.current)
-        callTimerRef.current = null
-      }
-      setCallDuration(0)
-    }
-
-    return () => {
-      if (callTimerRef.current) {
-        clearInterval(callTimerRef.current)
-      }
-    }
-  }, [isConnected])
-
-  // Audio context initialization (like your old code)
-  useEffect(() => {
-    if (isConnected && !audioContextRef.current) {
-      try {
-        audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)()
-        console.log("AudioContext initialized.")
-        nextPlayTimeRef.current = audioContextRef.current.currentTime
-      } catch (e) {
-        console.error("Error initializing AudioContext:", e)
-        setError("Audio playback not supported or blocked by browser.")
-      }
-    }
-
-    return () => {
-      if (audioContextRef.current) {
-        console.log("Closing AudioContext.")
-        audioContextRef.current
-          .close()
-          .then(() => {
-            audioContextRef.current = null
-          })
-          .catch((e) => console.error("Error closing AudioContext:", e))
-      }
-      audioQueueRef.current = []
-      nextPlayTimeRef.current = 0
-      if (currentSourceNodeRef.current) {
-        currentSourceNodeRef.current.stop()
-        currentSourceNodeRef.current.disconnect()
-        currentSourceNodeRef.current = null
-      }
-    }
-  }, [isConnected])
-
-  // Audio playback function 
-  const playNextAudioChunk = async () => {
-    if (!audioContextRef.current || audioQueueRef.current.length === 0) {
-      return
-    }
-
-    // Only proceed if not currently playing
-    if (currentSourceNodeRef.current) {
-      return  // Only skip if already playing
-    }
-
-    const audioChunk = audioQueueRef.current.shift()
-    try {
-      const audioBuffer = await audioContextRef.current.decodeAudioData(audioChunk)
-      const source = audioContextRef.current.createBufferSource()
-      source.buffer = audioBuffer
-      source.connect(audioContextRef.current.destination)
-
-      const currentTime = audioContextRef.current.currentTime
-      if (nextPlayTimeRef.current < currentTime) {
-        nextPlayTimeRef.current = currentTime
-      }
-
-      source.start(nextPlayTimeRef.current)
-      nextPlayTimeRef.current += audioBuffer.duration
-      currentSourceNodeRef.current = source
-
-      setIsSpeaking(true)
-
-      // Pause user mic if avatar starts speaking
-      if (isListening && recognition) {
-        console.log("[AUDIO] Avatar is speaking, pausing user microphone.")
-        recognition.stop()
-        setIsListening(false)
-      }
-
-      source.onended = () => {
-        currentSourceNodeRef.current = null
-        if (audioQueueRef.current.length > 0) {
-          // Recursively play next chunk without blocking
-          setTimeout(() => playNextAudioChunk(), 0)
-        } else {
-          console.log("[AUDIO] Avatar finished speaking all queued audio.")
-          setIsSpeaking(false)
-          // Re-enable microphone if in an active call
-          if (isConnected && !isListening && recognition && !isMuted) {
-            console.log("[AUDIO] Re-enabling microphone for user input after avatar spoke.")
-            startSpeechRecognition()
-          }
-        }
-      }
-    } catch (e) {
-      console.error("[AUDIO] Error decoding or playing audio chunk:", e)
-      setError("Error playing avatar's voice. Please try again.")
-      setIsSpeaking(false)
-      audioQueueRef.current = []
-      nextPlayTimeRef.current = audioContextRef.current.currentTime
-      if (isConnected && !isListening && recognition && !isMuted) {
-        startSpeechRecognition()
-      }
-    }
+  const canStartConversation = () => {
+    if (!usage) return true;
+    return usage.conversation.remaining > 0;
   };
 
-  // Effect to trigger playback when queue changes 
-  useEffect(() => {
-    if (!isSpeaking && audioQueueRef.current.length > 0 && audioContextRef.current) {
-      playNextAudioChunk()
-    }
-  }, [audioQueueRef.current.length, isSpeaking])
+  const validateAndStart = () => {
+    setError("");
 
-  // Inactivity timeout - auto-stop after 60 seconds of no user activity
-  useEffect(() => {
-    if (isConnected) {
-      const checkInactivity = () => {
-        const timeSinceLastActivity = Date.now() - lastUserActivityRef.current
-        if (timeSinceLastActivity > 60000) {
-          // 60 seconds
-          console.log("Auto-stopping conversation due to inactivity")
-          endConversation()
-        }
-      }
-
-      inactivityTimeoutRef.current = setInterval(checkInactivity, 5000) // Check every 5 seconds
-    } else {
-      if (inactivityTimeoutRef.current) {
-        clearInterval(inactivityTimeoutRef.current)
-        inactivityTimeoutRef.current = null
-      }
+    if (!selectedPersona) {
+      setError("Please select a persona");
+      return;
     }
 
-    return () => {
-      if (inactivityTimeoutRef.current) {
-        clearInterval(inactivityTimeoutRef.current)
-      }
-    }
-  }, [isConnected])
-
-  // Format time
-  const formatTime = (seconds) => {
-    const mins = Math.floor(seconds / 60)
-    const secs = seconds % 60
-    return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`
-  }
-
-  // Check if user can start conversation
-  const canStartConversation = () => {
-    if (!usage) return true
-    return usage.conversation.remaining >= duration
-  }
-
-  // Start conversation
-  const startConversation = async () => {
     if (!selectedAvatar) {
-      setError("Please select an avatar")
-      return
+      setError("Please select a replica");
+      return;
     }
 
     if (!canStartConversation()) {
-      setError(
-        `Insufficient conversation minutes. You need ${duration} minutes but only have ${usage.conversation.remaining} remaining.`,
-      )
-      return
+      setError("Insufficient conversation minutes");
+      return;
     }
 
-    setIsConnecting(true)
-    setConnectionStatus("Initializing connection...")
-    setError("")
-    lastUserActivityRef.current = Date.now()
-
-    try {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession()
-      if (!session) {
-        throw new Error("No active session")
-      }
-
-      const backendWsUrl = import.meta.env.VITE_BACKEND_WS_URL || "ws://localhost:5000"
-
-      if (conversationType === "voice") {
-        // Start voice conversation
-        const wsUrl = `${backendWsUrl}/voice-chat?token=${session.access_token}&avatarId=${selectedAvatar.id}&language=${language}`
-        console.log("Connecting to voice WebSocket:", wsUrl)
-
-        voiceCallWs = new WebSocket(wsUrl)
-        voiceCallWs.binaryType = "arraybuffer"
-
-        voiceCallWs.onopen = () => {
-          console.log("Voice chat WebSocket opened")
-          setConnectionStatus("Connecting to voice service...")
-        }
-
-        voiceCallWs.onmessage = handleVoiceMessage
-        voiceCallWs.onclose = handleDisconnect
-        voiceCallWs.onerror = handleError
-      } else {
-        // Start video conversation
-        const wsUrl = `${backendWsUrl}/video-chat?token=${session.access_token}&avatarId=${selectedAvatar.id}&language=${language}`
-        console.log("Connecting to video WebSocket:", wsUrl)
-
-        videoCallWs = new WebSocket(wsUrl)
-        videoCallWs.binaryType = "arraybuffer"
-
-        videoCallWs.onopen = () => {
-          console.log("Video chat WebSocket opened")
-          setConnectionStatus("Connecting to video and voice services...")
-        }
-
-        videoCallWs.onmessage = handleVideoMessage
-        videoCallWs.onclose = handleDisconnect
-        videoCallWs.onerror = handleError
-      }
-    } catch (error) {
-      console.error("Error starting conversation:", error)
-      setError(`Failed to start conversation: ${error.message}`)
-      setIsConnecting(false)
-      setConnectionStatus("")
-    }
-  }
-
-  // Handle voice message (based on your old code logic)
-  const handleVoiceMessage = async (event) => {
-    if (typeof event.data === "string") {
-      const data = JSON.parse(event.data)
-      console.log("Voice message:", data)
-
-      switch (data.type) {
-        case "connecting":
-          setConnectionStatus(data.message)
-          break
-        case "ready":
-          setIsConnected(true)
-          setIsConnecting(false)
-          setConnectionStatus("")
-          setMessages((prev) => [...prev, { type: "system", text: data.message }])
-          startSpeechRecognition()
-          break
-        case "llm_response_text":
-          setMessages((prev) => [...prev, { type: "avatar", text: data.text }])
-          break
-        case "speech_start":
-          setIsSpeaking(true)
-          break
-        case "speech_end":
-          setIsSpeaking(false)
-          break
-        case "error":
-          setError(data.message)
-          setIsConnecting(false)
-          setConnectionStatus("")
-          break
-      }
-    } else if (event.data instanceof ArrayBuffer) {
-      // Handle audio data - add to queue like your old code
-      if (event.data.byteLength > 0) {
-        audioQueueRef.current.push(event.data)
-        if (!isSpeaking && audioQueueRef.current.length > 0) {
-          playNextAudioChunk()
-        }
-      }
-    }
-  }
-
-  // Handle video message
-  const handleVideoMessage = async (event) => {
-    try {
-      if (typeof event.data === "string") {
-        const data = JSON.parse(event.data)
-        console.log("[VIDEO_CHAT] Received:", data.type)
-
-        switch (data.type) {
-          case "connecting":
-            setConnectionStatus(data.message)
-            break
-
-          case "ready":
-            setIsConnected(true)
-            setIsConnecting(false)
-            setConnectionStatus("")
-            setMessages((prev) => [...prev, { type: "system", text: data.message }])
-
-            if (!isMuted) {
-              setTimeout(() => startSpeechRecognition(), 1000)
-            }
-            break
-
-          case "llm_response_text":
-            setMessages((prev) => [...prev, { type: "avatar", text: data.text }])
-            break
-
-          case "speech_start":
-            setIsSpeaking(true)
-            if (isListening && recognition) {
-              recognition.stop()
-              setIsListening(false)
-            }
-            break
-
-          case "speech_end":
-            setIsSpeaking(false)
-            if (isConnected && !isMuted && !isSpeaking) {
-              setTimeout(() => startSpeechRecognition(), 500)
-            }
-            break
-
-          case "video_disconnected":
-            setError("Video service disconnected - switching to audio only")
-            break
-
-          case "error":
-            console.error("[VIDEO_CHAT] Error:", data.message)
-            setError(data.message)
-            setIsConnecting(false)
-            setConnectionStatus("")
-            break
-
-          default:
-            console.log("[VIDEO_CHAT] Unknown message type:", data.type)
-        }
-      } else if (event.data instanceof ArrayBuffer && event.data.byteLength > 1) {
-        const dataView = new Uint8Array(event.data)
-        const headerByte = dataView[0]
-        const payload = event.data.slice(1)
-
-        if (headerByte === 0x01 && payload.byteLength > 0) {
-          // Audio data (0x01)
-          console.log("[VIDEO_CHAT] Received audio chunk:", payload.byteLength, "bytes")
-          audioQueueRef.current.push(payload)
-          // Trigger playback if not already playing
-          if (!isSpeaking && audioQueueRef.current.length > 0) {
-            playNextAudioChunk()
-          }
-        } else if (headerByte === 0x02 && payload.byteLength > 0) {
-          // Video frame data (0x02)
-          console.log("[VIDEO_CHAT] Received video frame:", payload.byteLength, "bytes")
-          displayVideoFrame(payload)
-        } else {
-          console.warn("[VIDEO_CHAT] Unknown header byte:", headerByte, "payload size:", payload.byteLength)
-        }
-      }
-    } catch (error) {
-      console.error("[VIDEO_CHAT] Error handling message:", error)
-    }
+    setIsFullScreen(true);
+    startConversation();
   };
 
-  const displayVideoFrame = (frameData) => {
-  if (!videoRef.current || !frameData || frameData.byteLength === 0) {
-    return
-  }
-
-  try {
-    const canvas = videoRef.current
-    
-    if (!canvasContextRef.current) {
-      canvasContextRef.current = canvas.getContext('2d')
-    }
-
-    const ctx = canvasContextRef.current
-    const blob = new Blob([frameData], { type: "image/jpeg" })
-    const url = URL.createObjectURL(blob)
-    const img = new Image()
-    
-    img.onload = () => {
-      canvas.width = img.width
-      canvas.height = img.height
-      ctx.drawImage(img, 0, 0)
-      URL.revokeObjectURL(url)
-      
-      // Optional logging
-      frameCountRef.current += 1
-      if (frameCountRef.current % 30 === 0) {
-        console.log(`[VIDEO_FRAME] Displayed ${frameCountRef.current} frames`)
-      }
-    }
-
-    img.src = url
-  } catch (error) {
-    console.error("[VIDEO_FRAME] Error:", error)
-  }
-}
-
-
-  // Start speech recognition 
-  const startSpeechRecognition = () => {
-    if (!("webkitSpeechRecognition" in window)) {
-      setError("Speech recognition not supported in this browser")
-      return
-    }
-
-    if (recognition) {
-      recognition.stop()
-      recognition = null
-    }
-
-    recognition = new window.webkitSpeechRecognition()
-    recognition.continuous = true
-    recognition.interimResults = true
-    recognition.lang = language
-
-    recognition.onstart = () => {
-      console.log("Speech recognition started")
-      setIsListening(true)
-    }
-
-    recognition.onresult = (event) => {
-      let finalTranscript = ""
-      for (let i = event.resultIndex; i < event.results.length; i++) {
-        if (event.results[i].isFinal) {
-          finalTranscript += event.results[i][0].transcript
-        }
-      }
-
-      if (finalTranscript) {
-        console.log("User said:", finalTranscript)
-        lastUserActivityRef.current = Date.now()
-        setMessages((prev) => [...prev, { type: "user", text: finalTranscript }])
-
-        // Send to appropriate WebSocket
-        const ws = conversationType === "voice" ? voiceCallWs : videoCallWs
-
-        // ADD THIS DEBUG LOG
-        console.log("[DEBUG] Sending to WebSocket:", {
-          wsExists: !!ws,
-          wsState: ws?.readyState,
-          conversationType: conversationType,
-          message: finalTranscript
-        })
-
-        if (ws && ws.readyState === WebSocket.OPEN) {
-          const message = JSON.stringify({ type: "user_text", text: finalTranscript })
-          console.log("[DEBUG] Sending message:", message) // DEBUGGING
-          ws.send(message)
-        } else {
-          console.error("[DEBUG] WebSocket not ready!", {
-            wsExists: !!ws,
-            wsState: ws?.readyState
-          })
-        }
-      }
-    }
-
-    recognition.onerror = (event) => {
-      console.error("Speech recognition error:", event.error)
-      if (event.error !== "no-speech" && event.error !== "aborted") {
-        setError(`Speech recognition error: ${event.error}`)
-      }
-    }
-
-    recognition.onend = () => {
-      console.log("Speech recognition ended")
-      setIsListening(false)
-
-      // Restart recognition if still connected and not muted
-      if (isConnected && !isMuted) {
-        // Clear any existing timeout
-        if (recognitionRestartTimeoutRef.current) {
-          clearTimeout(recognitionRestartTimeoutRef.current)
-        }
-
-        // Restart after a short delay
-        recognitionRestartTimeoutRef.current = setTimeout(() => {
-          if (isConnected && !isMuted) {
-            startSpeechRecognition()
-          }
-        }, 500)
-      }
-    }
-
-    try {
-      recognition.start()
-    } catch (error) {
-      console.error("Failed to start speech recognition:", error)
-    }
-  }
-
-  // Handle disconnect
-  const handleDisconnect = () => {
-    console.log("Conversation disconnected")
-    setIsConnected(false)
-    setIsConnecting(false)
-    setConnectionStatus("")
-    setIsSpeaking(false)
-    setIsListening(false)
-
-    // Stop any playing audio (like your old code)
-    if (currentSourceNodeRef.current) {
-      try {
-        currentSourceNodeRef.current.stop()
-      } catch (e) {
-        // Ignore if already stopped
-      }
-      currentSourceNodeRef.current = null
-    }
-
-    // Clear audio queue
-    audioQueueRef.current = []
-
-    // Clear recognition restart timeout
-    if (recognitionRestartTimeoutRef.current) {
-      clearTimeout(recognitionRestartTimeoutRef.current)
-      recognitionRestartTimeoutRef.current = null
-    }
-
-    // Clear inactivity timeout
-    if (inactivityTimeoutRef.current) {
-      clearInterval(inactivityTimeoutRef.current)
-      inactivityTimeoutRef.current = null
-    }
-
-    if (recognition) {
-      recognition.stop()
-      recognition = null
-    }
-
-    // Calculate conversation duration and update usage
-    if (conversationStartTimeRef.current) {
-      const durationMinutes = (Date.now() - conversationStartTimeRef.current) / (1000 * 60)
-      updateConversationUsage(durationMinutes)
-    }
-
-    // <CHANGE> Clear canvas when disconnecting
-    if (videoRef.current && videoRef.current.tagName === 'CANVAS') {
-      const ctx = canvasContextRef.current
-      if (ctx) {
-        ctx.clearRect(0, 0, videoRef.current.width, videoRef.current.height)
-      }
-      canvasContextRef.current = null
-    }
-  }
-
-  // Handle error
-  const handleError = (error) => {
-    console.error("WebSocket error:", error)
-    setError("Connection error occurred")
-    handleDisconnect()
-  }
-
-  // End conversation
-  const endConversation = () => {
-    if (voiceCallWs) {
-      voiceCallWs.close()
-      voiceCallWs = null
-    }
-    if (videoCallWs) {
-      videoCallWs.close()
-      videoCallWs = null
-    }
-    handleDisconnect()
-  }
-
-  // Toggle mute
-  const toggleMute = () => {
-    const newMutedState = !isMuted
-    setIsMuted(newMutedState)
-
-    if (recognition) {
-      if (newMutedState) {
-        // Mute - stop recognition
-        recognition.stop()
-        setIsListening(false)
-      } else {
-        // Unmute - restart recognition if connected
-        if (isConnected) {
-          setTimeout(() => startSpeechRecognition(), 100)
-        }
-      }
-    }
-  }
-
-  // Update conversation usage
-  const updateConversationUsage = async (durationMinutes) => {
+  const startConversation = async () => {
     try {
       const {
         data: { session },
-      } = await supabase.auth.getSession()
-      if (session) {
-        await fetch(`${import.meta.env.VITE_BACKEND_API_URL}/usage/update-conversation`, {
+      } = await supabase.auth.getSession();
+
+      if (!session) {
+        throw new Error("Not authenticated. Please log in again.");
+      }
+
+      console.log("[ConversationStudio] Starting conversation:", {
+        avatarId: selectedAvatar.id,
+        avatarName: selectedAvatar.name,
+        personaId: selectedPersona?.id,
+        personaName: selectedPersona?.name,
+        conversationType: audioOnly ? "voice" : "video",
+      });
+
+      const response = await fetch(
+        `${import.meta.env.VITE_BACKEND_API_URL}/livekit/generate-token`,
+        {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
             Authorization: `Bearer ${session.access_token}`,
           },
-          body: JSON.stringify({ durationMinutes }),
-        })
+          body: JSON.stringify({
+            avatarId: selectedAvatar.id,
+            personaId: selectedPersona?.id,
+            voiceId: selectedAvatar.default_voice_id || null,
+            conversationType: audioOnly ? "voice" : "video",
+            language,
+            conversationName: conversationName || null,
+            customGreeting: customGreeting || undefined,
+            conversationContext: conversationContext || undefined,
+          }),
+        }
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || "Failed to generate token");
+      }
+
+      const result = await response.json();
+
+      console.log("[ConversationStudio] Token generated successfully");
+
+      // ✅ Pass metadata to LiveKit
+      await connect({
+        token: result.data.token,
+        wsUrl: result.data.wsUrl,
+        roomName: result.data.roomName,
+        conversationId: result.data.conversationId,
+        conversationType: audioOnly ? "voice" : "video",
+        metadata: {
+          avatar_id: selectedAvatar.id,
+          persona_id: selectedPersona?.id,
+          persona_name: selectedPersona?.name,
+          audio_only: audioOnly,
+        },
+      });
+    } catch (error) {
+      console.error("[ConversationStudio] Conversation error:", error);
+      setError(error.message || "Failed to start conversation");
+      setIsFullScreen(false);
+    }
+  };
+
+  const handleEndConversation = async () => {
+    try {
+      const result = await disconnect();
+
+      if (result?.conversationId) {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+
+        if (session) {
+          await fetch(
+            `${import.meta.env.VITE_BACKEND_API_URL}/livekit/end-conversation`,
+            {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${session.access_token}`,
+              },
+              body: JSON.stringify({
+                conversationId: result.conversationId,
+                durationMinutes: result.durationMinutes,
+              }),
+            }
+          );
+        }
       }
     } catch (error) {
-      console.error("Error updating usage:", error)
+      console.error("[ConversationStudio] End conversation error:", error);
+    } finally {
+      setIsFullScreen(false);
     }
+  };
+
+  // Helper to get avatar profile image
+  const getAvatarProfileImage = (avatar) => {
+    if (!avatar) return null;
+
+    // Priority: thumbnail_url > image_url
+    if (avatar.thumbnail_url) return avatar.thumbnail_url;
+    if (avatar.image_url) {
+      // If image_url is a video, show a placeholder
+      if (avatar.image_url.match(/\.(mp4|webm|mov)$/i)) {
+        return null; // Will show initials
+      }
+      return avatar.image_url;
+    }
+
+    return null;
+  };
+
+  // Full-screen view
+  if (isFullScreen) {
+    return (
+      <FullScreenConversation
+        avatar={selectedAvatar}
+        persona={selectedPersona}
+        conversationType={audioOnly ? "voice" : "video"}
+        isConnected={isConnected}
+        isConnecting={isConnecting}
+        connectionStatus={connectionStatus}
+        callDuration={callDuration}
+        isSpeaking={isSpeaking}
+        messages={messages}
+        error={livekitError}
+        onEndCall={handleEndConversation}
+        onToggleMicrophone={toggleMicrophone}
+        videoElementRef={videoElementRef}
+        theme={theme}
+      />
+    );
   }
 
+  // Main configuration view
   return (
     <div
-      className={`${theme === "dark" ? "bg-gray-900 text-gray-100" : "bg-gray-50 text-gray-900"} min-h-screen flex flex-col lg:flex-row p-4 lg:p-8 space-y-8 lg:space-y-0 lg:space-x-8`}
+      className={`min-h-screen ${
+        theme === "dark" ? "bg-gray-950" : "bg-gray-50"
+      }`}
     >
-      {/* Left Panel - Setup */}
-      <div className="lg:w-1/3 xl:w-1/4 flex flex-col space-y-6">
-        {/* Avatar Selection */}
-        <div className={`${theme === "dark" ? "bg-gray-800" : "bg-white"} rounded-xl p-6 shadow-lg`}>
-          <h2 className="text-xl font-bold mb-4">Select Avatar</h2>
-          <div
-            onClick={() => setShowAvatarModal(true)}
-            className={`flex items-center justify-between ${theme === "dark" ? "bg-gray-700 hover:bg-gray-600" : "bg-gray-100 hover:bg-gray-200"} rounded-lg p-3 cursor-pointer transition-colors`}
-          >
-            <div className="flex items-center space-x-3">
-              <div
-                className={`w-10 h-10 rounded-full overflow-hidden ${theme === "dark" ? "bg-gray-600" : "bg-gray-300"} flex-shrink-0`}
-              >
-                {selectedAvatar ? (
-                  <img
-                    src={selectedAvatar.image_url || "/placeholder.svg"}
-                    alt={selectedAvatar.name}
-                    className="w-full h-full object-cover"
-                  />
-                ) : (
-                  <div
-                    className={`w-full h-full flex items-center justify-center text-sm font-bold ${theme === "dark" ? "text-gray-400" : "text-gray-600"}`}
-                  >
-                    ?
-                  </div>
-                )}
-              </div>
-              <div>
-                <p className={`font-semibold ${theme === "dark" ? "text-white" : "text-gray-900"}`}>
-                  {selectedAvatar?.name || "Select Avatar"}
-                </p>
-                <p className={`text-sm ${theme === "dark" ? "text-gray-400" : "text-gray-600"}`}>
-                  {selectedAvatar ? "Selected" : "Click to choose"}
-                </p>
-              </div>
-            </div>
-            <ChevronDown size={20} />
-          </div>
-        </div>
-
-        {/* Conversation Settings */}
-        <div className={`${theme === "dark" ? "bg-gray-800" : "bg-white"} rounded-xl p-6 shadow-lg`}>
-          <h2 className="text-xl font-bold mb-4">Settings</h2>
-
-          {/* Conversation Type */}
-          <div className="mb-4">
-            <label className={`block text-sm font-medium ${theme === "dark" ? "text-gray-300" : "text-gray-700"} mb-2`}>
-              Type
-            </label>
-            <div className="flex space-x-2">
-              <button
-                onClick={() => setConversationType("voice")}
-                className={`flex-1 flex items-center justify-center space-x-2 py-2 px-4 rounded-lg transition-colors ${conversationType === "voice"
-                  ? "bg-gradient-to-r from-purple-500 to-pink-500 text-white"
-                  : `${theme === "dark" ? "bg-gray-700 text-gray-300 hover:bg-gray-600" : "bg-gray-200 text-gray-700 hover:bg-gray-300"}`
-                  }`}
-              >
-                <Phone size={16} />
-                <span>Voice</span>
-              </button>
-              <button
-                onClick={() => setConversationType("video")}
-                className={`flex-1 flex items-center justify-center space-x-2 py-2 px-4 rounded-lg transition-colors ${conversationType === "video"
-                  ? "bg-gradient-to-r from-purple-500 to-pink-500 text-white"
-                  : `${theme === "dark" ? "bg-gray-700 text-gray-300 hover:bg-gray-600" : "bg-gray-200 text-gray-700 hover:bg-gray-300"}`
-                  }`}
-              >
-                <Video size={16} />
-                <span>Video</span>
-              </button>
-            </div>
-          </div>
-
-          {/* Language */}
-          <div className="mb-4">
-            <label className={`block text-sm font-medium ${theme === "dark" ? "text-gray-300" : "text-gray-700"} mb-2`}>
-              Language
-            </label>
-            <select
-              value={language}
-              onChange={(e) => setLanguage(e.target.value)}
-              className={`w-full px-3 py-2 ${theme === "dark" ? "bg-gray-700 text-gray-200 border-gray-600" : "bg-gray-100 text-gray-900 border-gray-300"} border rounded-lg focus:outline-none focus:ring-2 focus:ring-pink-500`}
+      {/* Header */}
+      <div
+        className={`border-b ${
+          theme === "dark"
+            ? "border-gray-800 bg-gray-900"
+            : "border-gray-200 bg-white"
+        } px-6 py-4`}
+      >
+        <div className="max-w-7xl mx-auto flex items-center justify-between">
+          <h1 className="text-xl font-bold text-gray-900 dark:text-white">
+            New Conversation
+          </h1>
+          <div className="flex items-center gap-6 text-sm text-gray-600 dark:text-gray-400">
+            <button
+              onClick={() => navigate("/dashboard/history")}
+              className="flex items-center gap-2 hover:text-gray-900 dark:hover:text-white transition-colors"
             >
-              {SUPPORTED_LANGUAGES.map((lang) => (
-                <option key={lang.code} value={lang.code}>
-                  {lang.name}
-                </option>
-              ))}
-            </select>
+              <Clock size={16} />
+              History
+            </button>
+            <button className="flex items-center gap-2 hover:text-gray-900 dark:hover:text-white transition-colors">
+              <FileCode size={16} />
+              View Code
+            </button>
+            <button className="flex items-center gap-2 hover:text-gray-900 dark:hover:text-white transition-colors">
+              <BookOpen size={16} />
+              Read Docs
+            </button>
           </div>
-
-          {/* Duration */}
-          <div className="mb-4">
-            <label className={`block text-sm font-medium ${theme === "dark" ? "text-gray-300" : "text-gray-700"} mb-2`}>
-              Max Duration: {duration} minutes
-            </label>
-            <input
-              type="range"
-              min="1"
-              max="30"
-              value={duration}
-              onChange={(e) => setDuration(Number.parseInt(e.target.value))}
-              className="w-full"
-            />
-            <div className="flex justify-between text-xs text-gray-500 mt-1">
-              <span>1 min</span>
-              <span>30 min</span>
-            </div>
-          </div>
-
-          {/* Usage Warning */}
-          {usage && !canStartConversation() && (
-            <div className="mb-4 p-3 bg-red-100 dark:bg-red-900/20 border border-red-300 dark:border-red-700 rounded-lg">
-              <div className="flex items-center space-x-2">
-                <AlertTriangle size={16} className="text-red-500" />
-                <span className="text-sm text-red-700 dark:text-red-400">
-                  Insufficient conversation minutes ({usage.conversation.remaining} remaining)
-                </span>
-              </div>
-            </div>
-          )}
         </div>
-
-        {/* Usage Display */}
-        {usage && (
-          <div className={`${theme === "dark" ? "bg-gray-800" : "bg-white"} rounded-xl p-6 shadow-lg`}>
-            <h2 className="text-xl font-bold mb-4">Usage</h2>
-            <div className="space-y-3">
-              <div>
-                <div className="flex justify-between text-sm mb-1">
-                  <span>Conversation Minutes</span>
-                  <span>
-                    {usage.conversation.used}/{usage.conversation.limit}
-                  </span>
-                </div>
-                <div className="w-full bg-gray-200 rounded-full h-2">
-                  <div
-                    className="bg-purple-500 h-2 rounded-full"
-                    style={{ width: `${usage.conversation.percentage}%` }}
-                  />
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Connection Status */}
-        {isConnecting && connectionStatus && (
-          <div className={`${theme === "dark" ? "bg-gray-800" : "bg-white"} rounded-xl p-6 shadow-lg`}>
-            <div className="flex items-center space-x-3">
-              <Loader2 className="animate-spin text-purple-500" size={20} />
-              <span className="text-sm">{connectionStatus}</span>
-            </div>
-          </div>
-        )}
-
-        {/* Start/End Button */}
-        <button
-          onClick={isConnected ? endConversation : startConversation}
-          disabled={isConnecting || !selectedAvatar || (!canStartConversation() && !isConnected)}
-          className={`w-full py-4 rounded-xl font-bold text-lg transition-all duration-300 transform active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed ${isConnected
-            ? "bg-gradient-to-r from-red-500 to-red-600 text-white hover:from-red-600 hover:to-red-700"
-            : "bg-gradient-to-r from-purple-500 to-pink-500 text-white hover:from-purple-600 hover:to-pink-600"
-            }`}
-        >
-          {isConnecting ? (
-            <div className="flex items-center justify-center space-x-2">
-              <Loader2 className="animate-spin" size={20} />
-              <span>Connecting...</span>
-            </div>
-          ) : isConnected ? (
-            <div className="flex items-center justify-center space-x-2">
-              <Square size={20} />
-              <span>End Conversation</span>
-            </div>
-          ) : (
-            <div className="flex items-center justify-center space-x-2">
-              <Play size={20} />
-              <span>Start Conversation</span>
-            </div>
-          )}
-        </button>
       </div>
 
-      {/* Right Panel - Conversation */}
-      <div className="lg:w-2/3 xl:w-3/4 flex flex-col space-y-6">
-        {/* Video/Avatar Display */}
-        <div
-          className={`${theme === "dark" ? "bg-gray-800" : "bg-white"} rounded-xl shadow-lg overflow-hidden flex-grow`}
-        >
-          {isConnected ? (
-            <div className="relative h-full min-h-[400px]">
-              {conversationType === "video" ? (
-                <div className="relative w-full h-full bg-black rounded-xl overflow-hidden">
-                  <canvas
-                    ref={videoRef}
-                    className="w-full h-full"
-                    style={{ minHeight: '400px', display: 'block' }}
-                  />
+      {/* Main Content */}
+      <div className="max-w-7xl mx-auto px-6 py-8">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          {/* Left Column - Basics */}
+          <div className="lg:col-span-2 space-y-6">
+            <div
+              className={`${
+                theme === "dark"
+                  ? "bg-gray-900 border-gray-800"
+                  : "bg-white border-gray-200"
+              } rounded-lg border p-6`}
+            >
+              <h2 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-6">
+                Basics
+              </h2>
 
-                  {/* Call Controls Overlay */}
-                  <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 flex items-center space-x-4 bg-black bg-opacity-50 rounded-full px-6 py-3">
-                    <button
-                      onClick={toggleMute}
-                      className={`p-3 rounded-full transition-colors ${isMuted ? "bg-red-500 text-white" : "bg-gray-700 text-gray-300 hover:bg-gray-600"
-                        }`}
-                    >
-                      {isMuted ? <MicOff size={20} /> : <Mic size={20} />}
-                    </button>
-
-                    <div className="text-white font-mono text-lg">{formatTime(callDuration)}</div>
-
-                    <button
-                      onClick={() => setIsVideoEnabled(!isVideoEnabled)}
-                      className={`p-3 rounded-full transition-colors ${!isVideoEnabled ? "bg-red-500 text-white" : "bg-gray-700 text-gray-300 hover:bg-gray-600"
-                        }`}
-                    >
-                      {isVideoEnabled ? <Video size={20} /> : <VideoOff size={20} />}
-                    </button>
-                  </div>
-
-                  {/* Speaking Indicator */}
-                  {isSpeaking && (
-                    <div className="absolute top-4 left-4 flex items-center space-x-2 bg-green-500 text-white px-3 py-1 rounded-full animate-pulse">
-                      <Volume2 size={16} />
-                      <span className="text-sm">Avatar Speaking</span>
-                    </div>
-                  )}
-
-
-                  {/* Listening Indicator */}
-                  {isListening && !isMuted && (
-                    <div className="absolute top-4 right-4 flex items-center space-x-2 bg-red-500 text-white px-3 py-1 rounded-full animate-pulse">
-                      <Mic size={16} />
-                      <span className="text-sm">Listening</span>
-                    </div>
-                  )}
-                </div>
-              ) : (
-                // Voice-only mode
-                <div className="flex flex-col items-center justify-center h-full p-8">
-                  <div className="relative">
-                    <img
-                      src={selectedAvatar?.image_url || "/placeholder.svg"}
-                      alt={selectedAvatar?.name}
-                      className="w-48 h-48 rounded-full object-cover border-4 border-purple-500 shadow-2xl"
+              <div className="space-y-6">
+                {/* Persona */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-900 dark:text-white mb-2">
+                    Persona
+                  </label>
+                  <button
+                    onClick={() => setShowPersonaModal(true)}
+                    className={`w-full px-4 py-3 ${
+                      theme === "dark"
+                        ? "bg-gray-800 border-gray-700 hover:border-gray-600"
+                        : "bg-gray-50 border-gray-300 hover:border-gray-400"
+                    } border rounded-lg flex items-center justify-between text-left transition-colors`}
+                  >
+                    <span className="text-gray-900 dark:text-white">
+                      {selectedPersona
+                        ? selectedPersona.name
+                        : "Select persona..."}
+                    </span>
+                    <ChevronDown
+                      size={20}
+                      className="text-gray-400 flex-shrink-0"
                     />
+                  </button>
+                </div>
 
-                    {/* Audio Visualization */}
-                    {isSpeaking && (
-                      <div className="absolute inset-0 rounded-full border-4 border-green-500 animate-pulse" />
-                    )}
-                  </div>
-
-                  <h2 className={`text-2xl font-bold mt-6 ${theme === "dark" ? "text-white" : "text-gray-900"}`}>
-                    {selectedAvatar?.name}
-                  </h2>
-
-                  <div className="flex items-center space-x-4 mt-6 bg-black bg-opacity-50 rounded-full px-6 py-3">
+                {/* Replica (Avatar) */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-900 dark:text-white mb-2">
+                      Replica
+                    </label>
                     <button
-                      onClick={toggleMute}
-                      className={`p-3 rounded-full transition-colors ${isMuted ? "bg-red-500 text-white" : "bg-gray-700 text-gray-300 hover:bg-gray-600"
-                        }`}
+                      onClick={() => setShowAvatarModal(true)}
+                      className={`w-full px-4 py-3 ${
+                        theme === "dark"
+                          ? "bg-gray-800 border-gray-700 hover:border-gray-600"
+                          : "bg-gray-50 border-gray-300 hover:border-gray-400"
+                      } border rounded-lg flex items-center justify-between text-left transition-colors`}
                     >
-                      {isMuted ? <MicOff size={20} /> : <Mic size={20} />}
+                      {selectedAvatar ? (
+                        <div className="flex items-center gap-3 min-w-0">
+                          {getAvatarProfileImage(selectedAvatar) ? (
+                            <img
+                              src={getAvatarProfileImage(selectedAvatar)}
+                              alt={selectedAvatar.name}
+                              className="w-8 h-8 rounded-full object-cover flex-shrink-0"
+                              onError={(e) => {
+                                e.target.style.display = "none";
+                              }}
+                            />
+                          ) : (
+                            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-white text-sm font-semibold flex-shrink-0">
+                              {selectedAvatar.name.charAt(0).toUpperCase()}
+                            </div>
+                          )}
+                          <span className="text-gray-900 dark:text-white truncate">
+                            {selectedAvatar.name}
+                          </span>
+                        </div>
+                      ) : (
+                        <span className="text-gray-900 dark:text-white">
+                          Select replica...
+                        </span>
+                      )}
+                      <ChevronDown
+                        size={20}
+                        className="text-gray-400 flex-shrink-0 ml-2"
+                      />
                     </button>
-
-                    <div className="text-white font-mono text-lg">{formatTime(callDuration)}</div>
-
-                    <div className={`p-3 rounded-full ${isSpeaking ? "bg-green-500" : "bg-gray-700"} text-white`}>
-                      {isSpeaking ? <Volume2 size={20} /> : <VolumeX size={20} />}
-                    </div>
                   </div>
 
-                  {/* Status Indicators */}
-                  <div className="flex items-center space-x-4 mt-4">
-                    {isListening && !isMuted && (
-                      <div className="flex items-center space-x-2 text-red-500 animate-pulse">
-                        <Mic size={16} />
-                        <span className="text-sm">Listening</span>
-                      </div>
-                    )}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-900 dark:text-white mb-2 flex items-center gap-2">
+                      Conversation Language
+                      <Info size={14} className="text-gray-400" />
+                    </label>
+                    <select
+                      value={language}
+                      onChange={(e) => setLanguage(e.target.value)}
+                      className={`w-full px-4 py-3 ${
+                        theme === "dark"
+                          ? "bg-gray-800 border-gray-700"
+                          : "bg-gray-50 border-gray-300"
+                      } border rounded-lg text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500 transition-colors`}
+                    >
+                      {SUPPORTED_LANGUAGES.map((lang) => (
+                        <option key={lang.code} value={lang.code}>
+                          {lang.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
 
-                    {isSpeaking && (
-                      <div className="flex items-center space-x-2 text-green-500">
-                        <Volume2 size={16} />
-                        <span className="text-sm">Speaking</span>
-                      </div>
-                    )}
+                {/* Conversation Name */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-900 dark:text-white mb-2">
+                    Conversation Name{" "}
+                    <span className="text-gray-400">(optional)</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={conversationName}
+                    onChange={(e) => setConversationName(e.target.value)}
+                    placeholder="e.g., Customer Support Demo"
+                    className={`w-full px-4 py-3 ${
+                      theme === "dark"
+                        ? "bg-gray-800 border-gray-700"
+                        : "bg-gray-50 border-gray-300"
+                    } border rounded-lg text-gray-900 dark:text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500 transition-colors`}
+                  />
+                </div>
+
+                {/* Custom Greeting */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-900 dark:text-white mb-2">
+                    Custom Greeting{" "}
+                    <span className="text-gray-400">(optional)</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={customGreeting}
+                    onChange={(e) => setCustomGreeting(e.target.value)}
+                    placeholder="e.g., Hi there, welcome to our demo!"
+                    className={`w-full px-4 py-3 ${
+                      theme === "dark"
+                        ? "bg-gray-800 border-gray-700"
+                        : "bg-gray-50 border-gray-300"
+                    } border rounded-lg text-gray-900 dark:text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500 transition-colors`}
+                  />
+                </div>
+
+                {/* Conversation Context */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-900 dark:text-white mb-2 flex items-center gap-2">
+                    Conversation Context{" "}
+                    <span className="text-gray-400">(optional)</span>
+                    <Info size={14} className="text-gray-400" />
+                  </label>
+                  <textarea
+                    value={conversationContext}
+                    onChange={(e) => setConversationContext(e.target.value)}
+                    placeholder="Describe the context, e.g., 'This is a product demo for new customers'"
+                    rows={4}
+                    className={`w-full px-4 py-3 ${
+                      theme === "dark"
+                        ? "bg-gray-800 border-gray-700"
+                        : "bg-gray-50 border-gray-300"
+                    } border rounded-lg text-gray-900 dark:text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500 transition-colors resize-none`}
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Right Column - Properties */}
+          <div className="space-y-6">
+            <div
+              className={`${
+                theme === "dark"
+                  ? "bg-gray-900 border-gray-800"
+                  : "bg-white border-gray-200"
+              } rounded-lg border p-6`}
+            >
+              <h2 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-6">
+                Properties
+              </h2>
+
+              {/* Properties Link */}
+              <button
+                className={`w-full p-4 ${
+                  theme === "dark"
+                    ? "bg-gray-800 hover:bg-gray-750"
+                    : "bg-gray-50 hover:bg-gray-100"
+                } rounded-lg flex items-start justify-between transition-colors mb-6`}
+              >
+                <div className="flex items-start gap-3 text-left">
+                  <SettingsIcon
+                    size={20}
+                    className="text-gray-400 mt-0.5 flex-shrink-0"
+                  />
+                  <div>
+                    <h3 className="text-sm font-medium text-gray-900 dark:text-white mb-1">
+                      Properties
+                    </h3>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 leading-relaxed">
+                      Configure call duration, timeouts, media settings,
+                      recording options, and other conversation properties.
+                    </p>
+                  </div>
+                </div>
+                <ChevronDown
+                  size={16}
+                  className="text-gray-400 mt-1 flex-shrink-0 rotate-[-90deg]"
+                />
+              </button>
+
+              {/* Audio-Only Toggle */}
+              <div
+                className={`p-4 ${
+                  theme === "dark" ? "bg-gray-800" : "bg-gray-50"
+                } rounded-lg mb-6`}
+              >
+                <div className="flex items-start justify-between mb-2">
+                  <h3 className="text-sm font-medium text-gray-900 dark:text-white">
+                    Audio-Only
+                  </h3>
+                  <label className="relative inline-flex items-center cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={audioOnly}
+                      onChange={(e) => setAudioOnly(e.target.checked)}
+                      className="sr-only peer"
+                    />
+                    <div className="w-11 h-6 bg-gray-300 dark:bg-gray-700 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-purple-500 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-purple-600"></div>
+                  </label>
+                </div>
+                <p className="text-xs text-gray-500 dark:text-gray-400 leading-relaxed">
+                  Start a conversation in audio-only mode, perfect for
+                  voice-only or low-bandwidth environments.
+                </p>
+              </div>
+
+              {/* Usage Stats */}
+              {usage && (
+                <div className="mb-6">
+                  <h3 className="text-sm font-medium text-gray-900 dark:text-white mb-3">
+                    Usage
+                  </h3>
+                  <div className="space-y-2">
+                    <div className="flex justify-between text-xs">
+                      <span className="text-gray-500 dark:text-gray-400">
+                        Conversation Minutes
+                      </span>
+                      <span className="text-gray-900 dark:text-white font-medium">
+                        {usage.conversation.remaining} /{" "}
+                        {usage.conversation.total}
+                      </span>
+                    </div>
+                    <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                      <div
+                        className="bg-purple-600 h-2 rounded-full transition-all"
+                        style={{
+                          width: `${
+                            (usage.conversation.remaining /
+                              usage.conversation.total) *
+                            100
+                          }%`,
+                        }}
+                      />
+                    </div>
                   </div>
                 </div>
               )}
+
+              {/* Memories - Coming Soon */}
+              <div className="mb-6">
+                <h3 className="text-sm font-medium text-gray-900 dark:text-white mb-2">
+                  Memories
+                </h3>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mb-3 leading-relaxed">
+                  Allow your persona to remember and recall information from
+                  conversations based on a provided tag value.
+                </p>
+                <button
+                  disabled
+                  className={`w-full px-4 py-3 ${
+                    theme === "dark"
+                      ? "bg-gray-800 border-gray-700"
+                      : "bg-gray-50 border-gray-300"
+                  } border rounded-lg flex items-center justify-between text-left opacity-50 cursor-not-allowed`}
+                >
+                  <span className="text-sm text-gray-500 dark:text-gray-400">
+                    Select memories or type to add custom...
+                  </span>
+                  <ChevronDown size={16} className="text-gray-400" />
+                </button>
+              </div>
+
+              {/* Knowledge Base - Coming Soon */}
+              <div>
+                <div className="flex items-start justify-between mb-2">
+                  <div className="flex items-start gap-2">
+                    <Book size={18} className="text-gray-400 mt-0.5" />
+                    <div>
+                      <h3 className="text-sm font-medium text-gray-900 dark:text-white">
+                        Knowledge Base
+                      </h3>
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 leading-relaxed">
+                        Enable your persona to reference information from any
+                        previously uploaded documents during conversations.
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    disabled
+                    className="px-3 py-1.5 text-xs font-medium text-gray-400 border border-gray-300 dark:border-gray-700 rounded-lg opacity-50 cursor-not-allowed"
+                  >
+                    Add
+                  </button>
+                </div>
+              </div>
             </div>
-          ) : (
-            <div className="flex flex-col items-center justify-center h-full min-h-[400px] p-8">
-              <MessageCircle size={80} className={`mb-6 ${theme === "dark" ? "text-gray-600" : "text-gray-400"}`} />
-              <h2 className={`text-2xl font-bold mb-2 ${theme === "dark" ? "text-gray-300" : "text-gray-700"}`}>
-                Ready to Start
-              </h2>
-              <p className={`text-center ${theme === "dark" ? "text-gray-400" : "text-gray-600"}`}>
-                {selectedAvatar
-                  ? `Select your preferences and start a ${conversationType} conversation with ${selectedAvatar.name}`
-                  : "Select an avatar and configure your conversation settings"}
-              </p>
-            </div>
-          )}
+          </div>
         </div>
 
-        {/* Chat Messages */}
-        {messages.length > 0 && (
-          <div
-            className={`${theme === "dark" ? "bg-gray-800" : "bg-white"} rounded-xl p-6 shadow-lg max-h-60 overflow-y-auto`}
-          >
-            <h3 className="text-lg font-bold mb-4">Conversation</h3>
-            <div className="space-y-3">
-              {messages.map((message, index) => (
-                <div key={index} className={`flex ${message.type === "user" ? "justify-end" : "justify-start"}`}>
-                  <div
-                    className={`max-w-xs px-3 py-2 rounded-lg text-sm ${message.type === "user"
-                      ? "bg-purple-500 text-white"
-                      : message.type === "avatar"
-                        ? `${theme === "dark" ? "bg-gray-700 text-gray-200" : "bg-gray-200 text-gray-800"}`
-                        : "bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-400"
-                      }`}
-                  >
-                    {message.text}
-                  </div>
-                </div>
-              ))}
+        {/* Error Display */}
+        {(error || livekitError) && (
+          <div className="mt-6 max-w-7xl mx-auto">
+            <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 px-4 py-3 rounded-lg flex items-center gap-3">
+              <AlertTriangle size={20} className="flex-shrink-0" />
+              <span className="text-sm">{error || livekitError}</span>
             </div>
           </div>
         )}
 
-        {/* Error Display */}
-        {error && (
-          <div className="bg-red-100 dark:bg-red-900/20 border border-red-300 dark:border-red-700 text-red-700 dark:text-red-400 px-4 py-3 rounded-lg">
-            {error}
-          </div>
-        )}
+        {/* Create Button - Fixed Bottom Right */}
+        <div className="fixed bottom-8 right-8 z-40">
+          <button
+            onClick={validateAndStart}
+            disabled={
+              !selectedPersona ||
+              !selectedAvatar ||
+              !canStartConversation() ||
+              isConnecting
+            }
+            className="px-8 py-4 bg-gradient-to-r from-pink-500 to-purple-600 text-white rounded-xl font-semibold shadow-2xl hover:shadow-3xl disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center gap-3 text-base hover:scale-105 active:scale-95"
+          >
+            {isConnecting ? (
+              <>
+                <Loader2 className="animate-spin" size={20} />
+                Creating...
+              </>
+            ) : (
+              <>
+                Create Conversation
+                <ChevronDown className="rotate-[-90deg]" size={18} />
+              </>
+            )}
+          </button>
+        </div>
       </div>
 
-      {/* Avatar Selection Modal */}
-      <AnimatePresence>
-        {showAvatarModal && (
-          <AvatarModal
-            isOpen={showAvatarModal}
-            onClose={() => setShowAvatarModal(false)}
-            onSelect={(avatar) => {
-              setSelectedAvatar(avatar)
-              setShowAvatarModal(false)
-            }}
-            avatars={avatars}
-            theme={theme}
-          />
-        )}
-      </AnimatePresence>
-    </div>
-  )
-}
+      {/* Modals */}
+      <PersonaSelectionModal
+        isOpen={showPersonaModal}
+        onClose={() => setShowPersonaModal(false)}
+        personas={personas}
+        selectedPersona={selectedPersona}
+        onSelect={(persona) => {
+          setSelectedPersona(persona);
+          setShowPersonaModal(false);
+        }}
+        onCreate={() => navigate("/dashboard/avatars/create?type=persona")}
+        theme={theme}
+      />
 
-export default ConversationStudio
+      <AvatarSelectionModal
+        isOpen={showAvatarModal}
+        onClose={() => setShowAvatarModal(false)}
+        avatars={avatars}
+        selectedAvatar={selectedAvatar}
+        onSelect={(avatar) => {
+          setSelectedAvatar(avatar);
+          setShowAvatarModal(false);
+        }}
+        onCreate={() => navigate("/dashboard/avatars/create?type=avatar")}
+        theme={theme}
+      />
+    </div>
+  );
+}

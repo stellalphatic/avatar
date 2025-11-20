@@ -1,616 +1,693 @@
-"use client"
+import { useState, useRef, useEffect } from "react";
+import { useAuth } from "../contexts/AuthContext";
+import { useTheme } from "../contexts/ThemeContext";
+import supabase from "../supabaseClient";
+import { useNavigate, useSearchParams } from "react-router-dom";
+import {
+  ArrowLeft,
+  Upload,
+  Loader2,
+  AlertTriangle,
+  CheckCircle,
+  Info,
+  Lock,
+  FileCode,
+  BookOpen,
+} from "lucide-react";
 
-import { useState, useRef, useEffect } from "react"
-import { useAuth } from "../contexts/AuthContext"
-import supabase from "../supabaseClient"
-import { useNavigate } from "react-router-dom"
-import { Mic, ImageIcon, Save, Loader2, Info, PlayCircle, VideoIcon } from "lucide-react"
-import { motion, AnimatePresence } from "framer-motion"
+export default function CreateAvatar() {
+  const { user } = useAuth();
+  const { theme } = useTheme();
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
 
-const CreateAvatar = () => {
-  const { user } = useAuth()
-  const navigate = useNavigate()
-  const [step, setStep] = useState(1)
-  const [loading, setLoading] = useState(false)
-  const [fileUploading, setFileUploading] = useState(false)
-  const [error, setError] = useState(null)
-  const [successMessage, setSuccessMessage] = useState(null)
-  const [usage, setUsage] = useState(null)
+  const initialType = searchParams.get("type") || "avatar";
+  const [creationType, setCreationType] = useState(initialType);
 
-  const [formData, setFormData] = useState({
-    name: "",
-    persona_role: "",
-    system_prompt: "",
-    conversational_context: "",
-  })
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const [success, setSuccess] = useState(null);
+  const [usage, setUsage] = useState(null);
 
-  const [visualFile, setVisualFile] = useState(null)
-  const [voiceFile, setVoiceFile] = useState(null)
-  const visualInputRef = useRef(null)
-  const voiceInputRef = useRef(null)
+  // Avatar fields
+  const [avatarName, setAvatarName] = useState("");
+  const [avatarDescription, setAvatarDescription] = useState("");
+  const [visualFile, setVisualFile] = useState(null);
+  const [audioFile, setAudioFile] = useState(null);
+  const visualInputRef = useRef(null);
+  const audioInputRef = useRef(null);
 
-  // Fetch user usage stats on component mount
+  // Persona fields
+  const [personaName, setPersonaName] = useState("");
+  const [personaDescription, setPersonaDescription] = useState("");
+  const [personaRole, setPersonaRole] = useState("");
+  const [systemPrompt, setSystemPrompt] = useState("");
+  const [personaContext, setPersonaContext] = useState("");
+
+  // Fetch data
   useEffect(() => {
-    const fetchUsageStats = async () => {
-      if (!user) return
+    const fetchData = async () => {
+      if (!user) return;
 
       try {
         const {
           data: { session },
-        } = await supabase.auth.getSession()
+        } = await supabase.auth.getSession();
 
         if (session) {
-          const response = await fetch(`${import.meta.env.VITE_BACKEND_API_URL}/usage/stats`, {
-            headers: {
-              Authorization: `Bearer ${session.access_token}`,
-            },
-          })
+          // Fetch usage stats
+          const usageRes = await fetch(
+            `${import.meta.env.VITE_BACKEND_API_URL}/usage/stats`,
+            { headers: { Authorization: `Bearer ${session.access_token}` } }
+          );
 
-          if (response.ok) {
-            const result = await response.json()
-            if (result.success) {
-              setUsage(result.data)
-            }
+          if (usageRes.ok) {
+            const data = await usageRes.json();
+            if (data.success) setUsage(data.data);
           }
         }
       } catch (err) {
-        console.error("Error fetching usage stats:", err)
-        setError("Failed to load avatar creation limits.")
+        console.error("Error fetching data:", err);
       }
-    }
+    };
 
-    fetchUsageStats()
-  }, [user])
+    fetchData();
+  }, [user]);
 
-  // Check if user has exceeded avatar creation limit
-  const hasExceededLimit = usage && usage.avatarCreation.used >= usage.avatarCreation.limit
-
-  const remainingAvatars = usage ? Math.max(0, usage.avatarCreation.limit - usage.avatarCreation.used) : 0
-
-  const handleInputChange = (e) => {
-    const { name, value } = e.target
-    setFormData((prev) => ({ ...prev, [name]: value }))
-  }
-
-  const handleFileChange = (e, setFile, type) => {
-    setError(null)
+  const handleFileChange = (e, setFile) => {
     if (e.target.files && e.target.files[0]) {
-      const file = e.target.files[0]
-      if (type === "voice") {
-        const maxSizeMB = 5
-        if (file.size > maxSizeMB * 1024 * 1024) {
-          setError(`Voice file is too large. Max size is ${maxSizeMB}MB.`)
-          setFile(null)
-          return
-        }
-      } else if (type === "visual") {
-        const maxSizeMB = 10
-        if (file.size > maxSizeMB * 1024 * 1024) {
-          setError(`Visual file is too large. Max size is ${maxSizeMB}MB.`)
-          setFile(null)
-          return
-        }
-      }
-      setFile(file)
-    }
-  }
+      const file = e.target.files[0];
 
-  const uploadFile = async (file, bucketPath) => {
-    if (!file) return null
-    setFileUploading(true)
-    const filePath = `${user.id}/${bucketPath}/${Date.now()}-${file.name.replace(/\s/g, "_")}`
+      // Validate file size
+      const maxSize = file.type.startsWith("audio") ? 5 : 10; // 5MB for audio, 10MB for video/image
+      if (file.size > maxSize * 1024 * 1024) {
+        setError(`File size exceeds ${maxSize}MB limit`);
+        return;
+      }
+
+      setFile(file);
+    }
+  };
+
+  const uploadFile = async (file, path) => {
+    if (!file) return null;
+
+    const filePath = `${user.id}/${path}/${Date.now()}-${file.name.replace(
+      /\s/g,
+      "_"
+    )}`;
 
     try {
-      const { error: uploadError } = await supabase.storage.from("avatar-media").upload(filePath, file, {
-        cacheControl: "3600",
-        upsert: false,
-      })
+      const { error: uploadError } = await supabase.storage
+        .from("avatar-media")
+        .upload(filePath, file);
 
-      if (uploadError) {
-        throw uploadError
-      }
+      if (uploadError) throw uploadError;
 
-      const { data: publicUrlData } = supabase.storage.from("avatar-media").getPublicUrl(filePath)
-
-      return publicUrlData.publicUrl
+      const { data } = supabase.storage
+        .from("avatar-media")
+        .getPublicUrl(filePath);
+      return data.publicUrl;
     } catch (err) {
-      console.error(`Error uploading file to ${bucketPath}:`, err)
-      setError(`Failed to upload file: ${err.message}`)
-      return null
-    } finally {
-      setFileUploading(false)
+      throw new Error(`Upload failed: ${err.message}`);
     }
-  }
+  };
 
   const handleSubmit = async (e) => {
-    e.preventDefault()
-    setLoading(true)
-    setError(null)
-    setSuccessMessage(null)
-
-    if (!user) {
-      setError("User not authenticated. Please log in.")
-      setLoading(false)
-      return
-    }
-
-    if (hasExceededLimit) {
-      setError(`You have reached your limit of ${usage.avatarCreation.limit} custom avatars this month.`)
-      setLoading(false)
-      return
-    }
-
-    if (!visualFile) {
-      setError("Please upload an image or video for your avatar's visual asset.")
-      setLoading(false)
-      return
-    }
-
-    if (!voiceFile) {
-      setError("Please upload a voice sample for your avatar.")
-      setLoading(false)
-      return
-    }
-
-    if (!formData.name || !formData.system_prompt) {
-      setError("Avatar Name and System Prompt are required.")
-      setLoading(false)
-      return
-    }
+    e.preventDefault();
+    setLoading(true);
+    setError(null);
+    setSuccess(null);
 
     try {
-      let imageUrl = null
-      let videoUrl = null
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (!session) throw new Error("Not authenticated");
 
-      if (visualFile) {
+      if (creationType === "avatar") {
+        // Create Avatar
+        if (!avatarName || !visualFile) {
+          throw new Error("Avatar name and visual file are required");
+        }
+
+        // Upload files
+        let imageUrl = null;
+        let idleVideoUrl = null;
+        let voiceUrl = null;
+
         if (visualFile.type.startsWith("image/")) {
-          imageUrl = await uploadFile(visualFile, "avatars/images")
+          imageUrl = await uploadFile(visualFile, "avatars/images");
         } else if (visualFile.type.startsWith("video/")) {
-          videoUrl = await uploadFile(visualFile, "avatars/videos")
+          idleVideoUrl = await uploadFile(visualFile, "avatars/videos");
+          // For video, extract first frame as image (optional, can be done later)
+          imageUrl = idleVideoUrl; // Temp: use video URL
         }
-      }
 
-      const voiceUrl = await uploadFile(voiceFile, "avatars/voices")
-
-      if ((!imageUrl && !videoUrl) || !voiceUrl) {
-        throw new Error("Failed to upload all required media files.")
-      }
-
-      const avatarData = {
-        user_id: user.id,
-        name: formData.name,
-        image_url: imageUrl,
-        voice_url: voiceUrl,
-        video_url: videoUrl,
-        persona_role: formData.persona_role || null,
-        system_prompt: formData.system_prompt,
-        conversational_context: formData.conversational_context || null,
-        is_public: false,
-        llm_config: {},
-        stt_config: {},
-        tts_config: {},
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      }
-
-      const { error: insertError } = await supabase.from("avatars").insert([avatarData])
-
-      if (insertError) {
-        if (insertError.code === "23505") {
-          setError("An avatar with this name already exists. Please choose a different name.")
-        } else {
-          throw insertError
+        if (audioFile) {
+          voiceUrl = await uploadFile(audioFile, "avatars/voices");
         }
-      } else {
-        // Update avatar creation count in user profile using backend API
-        try {
-          const {
-            data: { session },
-          } = await supabase.auth.getSession()
 
-          if (session) {
-            await fetch(`${import.meta.env.VITE_BACKEND_API_URL}/usage/update-avatar-creation`, {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-                Authorization: `Bearer ${session.access_token}`,
-              },
-              body: JSON.stringify({ increment: 1 }),
-            })
+        const response = await fetch(
+          `${import.meta.env.VITE_BACKEND_API_URL}/avatars/create`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${session.access_token}`,
+            },
+            body: JSON.stringify({
+              name: avatarName,
+              description: avatarDescription,
+              image_url: imageUrl,
+              idle_video_url: idleVideoUrl,
+              voice_url: voiceUrl,
+            }),
           }
-        } catch (updateError) {
-          console.warn("Failed to update avatar creation count:", updateError)
+        );
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.message || "Failed to create avatar");
         }
 
-        setSuccessMessage("Avatar created successfully! Redirecting to My Avatars...")
-        setTimeout(() => navigate("/dashboard/avatars/my"), 2000)
+        const result = await response.json();
+        console.log("Avatar created:", result);
+
+        // Update usage
+        await fetch(
+          `${
+            import.meta.env.VITE_BACKEND_API_URL
+          }/usage/update-avatar-creation`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${session.access_token}`,
+            },
+          }
+        );
+
+        setSuccess("Replica created successfully!");
+        setTimeout(() => navigate("/dashboard/chat"), 2000);
+      } else {
+        // Create Persona
+        if (!personaName || !systemPrompt) {
+          throw new Error("Persona name and system prompt are required");
+        }
+
+        const response = await fetch(
+          `${import.meta.env.VITE_BACKEND_API_URL}/personas/create`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${session.access_token}`,
+            },
+            body: JSON.stringify({
+              name: personaName,
+              description: personaDescription,
+              persona_role: personaRole,
+              system_prompt: systemPrompt,
+              conversational_context: personaContext,
+            }),
+          }
+        );
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.message || "Failed to create persona");
+        }
+
+        const result = await response.json();
+        console.log("Persona created:", result);
+
+        setSuccess("Persona created successfully!");
+        setTimeout(() => navigate("/dashboard/chat"), 2000);
       }
     } catch (err) {
-      console.error("Avatar creation process error:", err.message)
-      setError(err.message || "An unexpected error occurred during avatar creation.")
+      console.error("Creation error:", err);
+      setError(err.message || "Failed to create");
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
-  const renderStepContent = () => {
-    switch (step) {
-      case 1:
-        return (
-          <motion.div
-            key="step1"
-            initial={{ opacity: 0, x: 50 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: -50 }}
-            transition={{ duration: 0.3 }}
-            className="space-y-4"
-          >
-            <h2 className="text-lg md:text-xl font-bold text-gray-900 dark:text-white mb-2 text-center">
-              1. Upload Media Assets
-            </h2>
-            <p className="text-sm text-gray-600 dark:text-gray-400 text-center mb-4">
-              Provide a visual representation (image or video) and a voice sample for your avatar.
-            </p>
-
-            {/* Usage Stats Display */}
-            {usage && (
-              <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg p-4 mb-4">
-                <div className="flex items-center justify-between mb-2">
-                  <h3 className="text-sm font-semibold text-blue-800 dark:text-blue-300">Avatar Creation Limit</h3>
-                  <span className="text-xs text-blue-600 dark:text-blue-400">{usage.currentPlan} Plan</span>
-                </div>
-                <div className="flex items-center justify-between text-sm text-blue-700 dark:text-blue-300 mb-2">
-                  <span>Used: {usage.avatarCreation.used}</span>
-                  <span>Limit: {usage.avatarCreation.limit}</span>
-                </div>
-                <div className="w-full bg-blue-200 dark:bg-blue-800 rounded-full h-2">
-                  <div
-                    className="bg-blue-600 h-2 rounded-full transition-all duration-300"
-                    style={{ width: `${usage.avatarCreation.percentage}%` }}
-                  />
-                </div>
-                <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">
-                  {remainingAvatars} avatar{remainingAvatars !== 1 ? "s" : ""} remaining this month
-                </p>
-              </div>
-            )}
-
-            {/* Visual Asset Upload */}
-            <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-3 md:p-4 border border-dashed border-gray-300 dark:border-gray-600 text-center">
-              <h3 className="font-semibold text-base md:text-lg text-gray-700 dark:text-gray-300 mb-2">
-                Visual Asset (Image or Video)
-              </h3>
-              <div
-                onClick={() => visualInputRef.current.click()}
-                className="cursor-pointer w-full max-w-xs sm:max-w-sm md:max-w-md lg:max-w-lg mx-auto h-48 sm:h-56 md:h-64 lg:h-72 bg-gray-100 dark:bg-gray-600/50 rounded-lg border-2 border-dashed border-gray-400 dark:border-gray-500 flex flex-col items-center justify-center text-gray-500 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors overflow-hidden relative"
-              >
-                {visualFile ? (
-                  visualFile.type.startsWith("image/") ? (
-                    <img
-                      src={URL.createObjectURL(visualFile) || "/placeholder.svg"}
-                      alt="Visual Preview"
-                      className="w-full h-full object-contain rounded-lg"
-                    />
-                  ) : (
-                    <video
-                      src={URL.createObjectURL(visualFile)}
-                      controls
-                      className="w-full h-full object-contain rounded-lg"
-                    />
-                  )
-                ) : (
-                  <>
-                    <ImageIcon size={32} className="text-gray-400" />
-                    <span className="text-sm mt-2 font-medium">Click to Upload Image or Video</span>
-                    <span className="text-xs mt-1 text-gray-400">.jpg, .png, .mp4, .mov (Max 10MB)</span>
-                  </>
-                )}
-                {fileUploading && (
-                  <div className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center text-white">
-                    <Loader2 className="animate-spin mr-2" size={24} /> Uploading...
-                  </div>
-                )}
-              </div>
-              <input
-                ref={visualInputRef}
-                type="file"
-                accept="image/*,video/*"
-                className="hidden"
-                onChange={(e) => handleFileChange(e, setVisualFile, "visual")}
-              />
-              {visualFile && <p className="text-xs text-center mt-2 text-gray-500 truncate">{visualFile.name}</p>}
-              <p className="text-xs text-gray-400 mt-2">
-                * For best results, use a clear image/video with a single, front-facing person.
-              </p>
-            </div>
-
-            {/* Voice Sample Upload */}
-            <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-3 md:p-4 border border-dashed border-gray-300 dark:border-gray-600 text-center">
-              <h3 className="font-semibold text-base md:text-lg text-gray-700 dark:text-gray-300 mb-2">
-                Voice Sample (Audio)
-              </h3>
-              <div
-                onClick={() => voiceInputRef.current.click()}
-                className="cursor-pointer w-full max-w-xs sm:max-w-sm md:max-w-md lg:max-w-lg mx-auto h-24 bg-gray-100 dark:bg-gray-600/50 rounded-lg border-2 border-dashed border-gray-400 dark:border-gray-500 flex flex-col items-center justify-center text-gray-500 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors relative"
-              >
-                {voiceFile ? (
-                  <div className="flex flex-col items-center w-full px-2">
-                    <PlayCircle size={32} className="text-green-500 mb-1" />
-                    <p className="text-xs text-gray-700 dark:text-gray-300 text-center truncate w-full">
-                      {voiceFile.name}
-                    </p>
-                    <audio
-                      src={URL.createObjectURL(voiceFile)}
-                      controls
-                      className="mt-2 w-full max-w-xs rounded-md"
-                    ></audio>
-                  </div>
-                ) : (
-                  <>
-                    <Mic size={32} className="text-gray-400" />
-                    <span className="text-sm mt-2 font-medium">Click to Upload Audio</span>
-                    <span className="text-xs mt-1 text-gray-400">.wav, .mp3 (Recommended 10s+, Max 5MB)</span>
-                  </>
-                )}
-                {fileUploading && (
-                  <div className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center text-white">
-                    <Loader2 className="animate-spin mr-2" size={24} /> Uploading...
-                  </div>
-                )}
-              </div>
-              <input
-                ref={voiceInputRef}
-                type="file"
-                accept="audio/wav,audio/mpeg"
-                className="hidden"
-                onChange={(e) => handleFileChange(e, setVoiceFile, "voice")}
-              />
-              {voiceFile && <p className="text-xs text-center mt-2 text-gray-500 truncate">{voiceFile.name}</p>}
-            </div>
-
-            <div className="flex justify-end mt-6">
-              <button
-                type="button"
-                onClick={() => {
-                  if (!visualFile || !voiceFile) {
-                    setError("Please upload both a visual asset (image/video) and a voice sample to proceed.")
-                    return
-                  }
-                  setStep(2)
-                }}
-                disabled={fileUploading || hasExceededLimit || !visualFile || !voiceFile}
-                className="px-5 py-2 bg-pink-600 text-white font-semibold rounded-lg shadow-md hover:bg-pink-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm"
-              >
-                Next Step
-              </button>
-            </div>
-          </motion.div>
-        )
-
-      case 2:
-        return (
-          <motion.form
-            key="step2"
-            initial={{ opacity: 0, x: 50 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: -50 }}
-            transition={{ duration: 0.3 }}
-            onSubmit={handleSubmit}
-            className="space-y-4"
-          >
-            <h2 className="text-lg md:text-xl font-bold text-gray-900 dark:text-white mb-2 text-center">
-              2. Avatar Details & Create
-            </h2>
-            <p className="text-sm text-gray-600 dark:text-gray-400 mb-4 text-center">
-              Define your avatar's personality and role.
-            </p>
-
-            {/* Avatar Details */}
-            <div className="space-y-3 bg-gray-50 dark:bg-gray-700 p-4 md:p-6 rounded-lg border border-gray-200 dark:border-gray-600">
-              <div>
-                <label htmlFor="name" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Avatar Name <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  id="name"
-                  name="name"
-                  value={formData.name}
-                  onChange={handleInputChange}
-                  required
-                  className="w-full px-3 py-2 text-sm bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-1 focus:ring-pink-500 focus:border-pink-500 outline-none text-gray-900 dark:text-white"
-                  placeholder="e.g., Financial Advisor Bot"
-                />
-              </div>
-              <div>
-                <label
-                  htmlFor="persona_role"
-                  className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
-                >
-                  Persona Role (Optional)
-                </label>
-                <input
-                  type="text"
-                  id="persona_role"
-                  name="persona_role"
-                  value={formData.persona_role}
-                  onChange={handleInputChange}
-                  className="w-full px-3 py-2 text-sm bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-1 focus:ring-pink-500 focus:border-pink-500 outline-none text-gray-900 dark:text-white"
-                  placeholder="e.g., Customer Support, Sales Representative"
-                />
-              </div>
-              <div>
-                <label
-                  htmlFor="system_prompt"
-                  className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
-                >
-                  System Prompt (Persona) <span className="text-red-500">*</span>
-                </label>
-                <textarea
-                  id="system_prompt"
-                  name="system_prompt"
-                  value={formData.system_prompt}
-                  onChange={handleInputChange}
-                  required
-                  rows="4"
-                  className="w-full px-3 py-2 text-sm bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-1 focus:ring-pink-500 focus:border-pink-500 outline-none text-gray-900 dark:text-white"
-                  placeholder="You are a helpful AI assistant named Charlie. You are an expert in financial planning for young professionals. Be friendly, encouraging, and provide clear, actionable advice."
-                ></textarea>
-                <p className="text-xs text-gray-400 mt-1">
-                  This is the core instruction that defines your avatar's personality and role.
-                </p>
-              </div>
-              <div>
-                <label
-                  htmlFor="conversational_context"
-                  className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
-                >
-                  Conversational Context (Optional)
-                </label>
-                <textarea
-                  id="conversational_context"
-                  name="conversational_context"
-                  value={formData.conversational_context}
-                  onChange={handleInputChange}
-                  rows="2"
-                  className="w-full px-3 py-2 text-sm bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-1 focus:ring-pink-500 focus:border-pink-500 outline-none text-gray-900 dark:text-white"
-                  placeholder="e.g., This conversation is for a first-time user consultation. The goal is to understand their financial situation."
-                ></textarea>
-                <p className="text-xs text-gray-400 mt-1">Additional context for specific conversation flows.</p>
-              </div>
-            </div>
-
-            {/* Summary of Uploaded Media */}
-            <div className="bg-gray-50 dark:bg-gray-700 p-3 md:p-4 rounded-lg border border-gray-200 dark:border-gray-600">
-              <h3 className="font-semibold text-base md:text-lg text-gray-700 dark:text-gray-300 mb-3">
-                Uploaded Media Summary:
-              </h3>
-              <p className="text-sm text-gray-600 dark:text-gray-400 flex items-center gap-2">
-                {visualFile ? (
-                  visualFile.type.startsWith("image/") ? (
-                    <ImageIcon size={16} />
-                  ) : (
-                    <VideoIcon size={16} />
-                  )
-                ) : (
-                  <Info size={16} />
-                )}
-                Visual Asset: <span className="truncate">{visualFile ? visualFile.name : "Not provided"}</span>
-              </p>
-              <p className="text-sm text-gray-600 dark:text-gray-400 flex items-center gap-2 mt-2">
-                {voiceFile ? <Mic size={16} /> : <Info size={16} />}
-                Voice Sample: <span className="truncate">{voiceFile ? voiceFile.name : "Not provided"}</span>
-              </p>
-            </div>
-
-            {/* Action Buttons */}
-            <div className="flex justify-between items-center mt-6 pt-4 border-t border-gray-200 dark:border-gray-700">
-              <button
-                type="button"
-                onClick={() => setStep(1)}
-                className="px-5 py-2 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 font-semibold rounded-lg shadow-md hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors text-sm"
-              >
-                Previous Step
-              </button>
-              <button
-                type="submit"
-                disabled={loading || fileUploading || hasExceededLimit}
-                className="px-5 py-2 bg-pink-600 text-white font-semibold rounded-lg shadow-md hover:bg-pink-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-sm"
-              >
-                {loading ? <Loader2 size={20} className="animate-spin" /> : <Save size={20} />}
-                {loading ? "Creating Avatar..." : "Create Avatar"}
-              </button>
-            </div>
-          </motion.form>
-        )
-
-      default:
-        return null
-    }
-  }
+  const canCreate = () => {
+    if (!usage) return true;
+    return usage.avatarCreation.remaining > 0;
+  };
 
   return (
-    <div className="max-w-4xl mx-auto bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6 md:p-8 border border-gray-200 dark:border-gray-700 my-8">
-      <h1 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white mb-6 text-center">
-        Create Your Custom Avatar
-      </h1>
-
-      {/* Step Indicators */}
-      <div className="flex justify-center mb-8 space-x-3">
-        {[
-          { label: "Media Assets", step: 1 },
-          { label: "Avatar Details", step: 2 },
-        ].map((s, index) => (
-          <div key={s.step} className="flex items-center">
-            <div
-              className={`w-8 h-8 md:w-9 md:h-9 rounded-full flex items-center justify-center font-bold text-white transition-all duration-300 text-sm ${
-                step === s.step ? "bg-purple-600 shadow-lg" : "bg-gray-300 dark:bg-gray-600"
-              }`}
+    <div
+      className={`min-h-screen ${
+        theme === "dark" ? "bg-gray-950" : "bg-gray-50"
+      }`}
+    >
+      {/* Header */}
+      <div
+        className={`border-b ${
+          theme === "dark"
+            ? "border-gray-800 bg-gray-900"
+            : "border-gray-200 bg-white"
+        } px-6 py-4`}
+      >
+        <div className="max-w-7xl mx-auto flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <button
+              onClick={() => navigate(-1)}
+              className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
             >
-              {s.step}
+              <ArrowLeft size={20} />
+            </button>
+            <h1 className="text-xl font-bold text-gray-900 dark:text-white">
+              New {creationType === "avatar" ? "Replica" : "Persona"}
+            </h1>
+            <div className="flex items-center gap-2 px-3 py-1 bg-blue-100 dark:bg-blue-900/30 rounded-full text-xs font-medium text-blue-700 dark:text-blue-300">
+              POST
+              <span className="text-gray-500 dark:text-gray-400">
+                / v2 / {creationType === "avatar" ? "replicas" : "personas"}
+              </span>
             </div>
-            <span
-              className={`ml-2 text-xs md:text-sm font-medium ${step >= s.step ? "text-purple-600 dark:text-purple-400" : "text-gray-500 dark:text-gray-400"}`}
-            >
-              {s.label}
-            </span>
-            {index < 1 && (
-              <div
-                className={`h-1 w-6 md:w-10 mx-2 md:mx-3 transition-all duration-300 ${
-                  step > s.step ? "bg-purple-600" : "bg-gray-300 dark:bg-gray-600"
-                }`}
-              ></div>
-            )}
           </div>
-        ))}
+          <div className="flex items-center gap-6 text-sm text-gray-600 dark:text-gray-400">
+            <button className="flex items-center gap-2 hover:text-gray-900 dark:hover:text-white">
+              <FileCode size={16} />
+              View Code
+            </button>
+            <button className="flex items-center gap-2 hover:text-gray-900 dark:hover:text-white">
+              <BookOpen size={16} />
+              Read Docs
+            </button>
+          </div>
+        </div>
       </div>
 
-      {/* Global Messages */}
-      <AnimatePresence>
-        {hasExceededLimit && (
-          <motion.div
-            initial={{ opacity: 0, y: -20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -20 }}
-            className="bg-yellow-100 dark:bg-yellow-900/20 border border-yellow-400 text-yellow-700 dark:text-yellow-300 px-4 py-3 rounded-md relative mb-4 text-sm"
-            role="alert"
+      {/* Main Content */}
+      <div className="max-w-7xl mx-auto px-6 py-8">
+        {/* Type Toggle */}
+        <div className="mb-8 flex gap-2">
+          <button
+            onClick={() => setCreationType("persona")}
+            className={`px-6 py-3 rounded-lg font-medium transition-colors ${
+              creationType === "persona"
+                ? "bg-purple-600 text-white"
+                : theme === "dark"
+                ? "bg-gray-800 text-gray-400 hover:text-white"
+                : "bg-gray-200 text-gray-600 hover:text-gray-900"
+            }`}
           >
-            <strong className="font-bold">Limit Reached!</strong>
-            <span className="block sm:inline ml-2">
-              You have reached your limit of {usage?.avatarCreation.limit} custom avatars this month. Please upgrade
-              your plan or wait for the next billing cycle.
-            </span>
-          </motion.div>
-        )}
+            Create Persona
+          </button>
+          <button
+            onClick={() => setCreationType("avatar")}
+            className={`px-6 py-3 rounded-lg font-medium transition-colors ${
+              creationType === "avatar"
+                ? "bg-purple-600 text-white"
+                : theme === "dark"
+                ? "bg-gray-800 text-gray-400 hover:text-white"
+                : "bg-gray-200 text-gray-600 hover:text-gray-900"
+            }`}
+          >
+            Create Replica
+          </button>
+        </div>
+
+        {/* Messages */}
         {error && (
-          <motion.div
-            initial={{ opacity: 0, y: -20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -20 }}
-            className="bg-red-100 dark:bg-red-900/20 border border-red-400 text-red-700 dark:text-red-300 px-4 py-3 rounded-md relative mb-4 text-sm"
-            role="alert"
-          >
-            <strong className="font-bold">Error!</strong>
-            <span className="block sm:inline ml-2">{error}</span>
-          </motion.div>
+          <div className="mb-6 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 px-4 py-3 rounded-lg flex items-center gap-3">
+            <AlertTriangle size={20} />
+            <span>{error}</span>
+          </div>
         )}
-        {successMessage && (
-          <motion.div
-            initial={{ opacity: 0, y: -20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -20 }}
-            className="bg-green-100 dark:bg-green-900/20 border border-green-400 text-green-700 dark:text-green-300 px-4 py-3 rounded-md relative mb-4 text-sm"
-            role="alert"
-          >
-            <strong className="font-bold">Success!</strong>
-            <span className="block sm:inline ml-2">{successMessage}</span>
-          </motion.div>
-        )}
-      </AnimatePresence>
 
-      {renderStepContent()}
+        {success && (
+          <div className="mb-6 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 text-green-700 dark:text-green-400 px-4 py-3 rounded-lg flex items-center gap-3">
+            <CheckCircle size={20} />
+            <span>{success}</span>
+          </div>
+        )}
+
+        <form onSubmit={handleSubmit}>
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            {/* Left Column */}
+            <div className="lg:col-span-2 space-y-6">
+              <div
+                className={`${
+                  theme === "dark"
+                    ? "bg-gray-900 border-gray-800"
+                    : "bg-white border-gray-200"
+                } rounded-lg border p-6`}
+              >
+                <h2 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-6">
+                  {creationType === "avatar" ? "Replica" : "Persona"}
+                </h2>
+
+                {creationType === "avatar" ? (
+                  <div className="space-y-6">
+                    {/* Avatar Name */}
+                    <div>
+                      <label className="block text-sm font-medium mb-2">
+                        Replica Name <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={avatarName}
+                        onChange={(e) => setAvatarName(e.target.value)}
+                        placeholder="Enter name for your replica"
+                        required
+                        className={`w-full px-4 py-3 ${
+                          theme === "dark"
+                            ? "bg-gray-800 border-gray-700"
+                            : "bg-gray-50 border-gray-300"
+                        } border rounded-lg focus:ring-2 focus:ring-purple-500 outline-none`}
+                      />
+                    </div>
+
+                    {/* Description */}
+                    <div>
+                      <label className="block text-sm font-medium mb-2">
+                        Description{" "}
+                        <span className="text-gray-400">(optional)</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={avatarDescription}
+                        onChange={(e) => setAvatarDescription(e.target.value)}
+                        placeholder="Brief description of this replica"
+                        className={`w-full px-4 py-3 ${
+                          theme === "dark"
+                            ? "bg-gray-800 border-gray-700"
+                            : "bg-gray-50 border-gray-300"
+                        } border rounded-lg focus:ring-2 focus:ring-purple-500 outline-none`}
+                      />
+                    </div>
+
+                    {/* Visual Upload */}
+                    <div>
+                      <label className="block text-sm font-medium mb-2">
+                        Upload Image or Video{" "}
+                        <span className="text-red-500">*</span>
+                      </label>
+                      <div
+                        onClick={() => visualInputRef.current.click()}
+                        className={`cursor-pointer p-8 ${
+                          theme === "dark"
+                            ? "bg-gray-800 border-gray-700 hover:border-gray-600"
+                            : "bg-gray-50 border-gray-300 hover:border-gray-400"
+                        } border-2 border-dashed rounded-lg text-center transition-colors`}
+                      >
+                        {visualFile ? (
+                          <div>
+                            <p className="text-sm font-medium mb-1">
+                              {visualFile.name}
+                            </p>
+                            <p className="text-xs text-gray-500">
+                              {(visualFile.size / (1024 * 1024)).toFixed(2)} MB
+                            </p>
+                          </div>
+                        ) : (
+                          <div>
+                            <Upload
+                              size={32}
+                              className="mx-auto text-gray-400 mb-2"
+                            />
+                            <p className="text-sm text-gray-600 dark:text-gray-400">
+                              Click to upload image or video
+                            </p>
+                            <p className="text-xs text-gray-500 mt-1">
+                              Max 10MB • JPG, PNG, MP4
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                      <input
+                        ref={visualInputRef}
+                        type="file"
+                        accept="image/*,video/*"
+                        className="hidden"
+                        onChange={(e) => handleFileChange(e, setVisualFile)}
+                      />
+                    </div>
+
+                    {/* Audio Upload (Optional) */}
+                    <div>
+                      <label className="block text-sm font-medium mb-2">
+                        Upload Audio Sample{" "}
+                        <span className="text-gray-400">(optional)</span>
+                      </label>
+                      <div
+                        onClick={() => audioInputRef.current.click()}
+                        className={`cursor-pointer p-8 ${
+                          theme === "dark"
+                            ? "bg-gray-800 border-gray-700 hover:border-gray-600"
+                            : "bg-gray-50 border-gray-300 hover:border-gray-400"
+                        } border-2 border-dashed rounded-lg text-center transition-colors`}
+                      >
+                        {audioFile ? (
+                          <div>
+                            <p className="text-sm font-medium mb-1">
+                              {audioFile.name}
+                            </p>
+                            <p className="text-xs text-gray-500">
+                              {(audioFile.size / (1024 * 1024)).toFixed(2)} MB
+                            </p>
+                          </div>
+                        ) : (
+                          <div>
+                            <Upload
+                              size={32}
+                              className="mx-auto text-gray-400 mb-2"
+                            />
+                            <p className="text-sm text-gray-600 dark:text-gray-400">
+                              Click to upload audio
+                            </p>
+                            <p className="text-xs text-gray-500 mt-1">
+                              Max 5MB • WAV, MP3
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                      <input
+                        ref={audioInputRef}
+                        type="file"
+                        accept="audio/*"
+                        className="hidden"
+                        onChange={(e) => handleFileChange(e, setAudioFile)}
+                      />
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-6">
+                    {/* Persona Name */}
+                    <div>
+                      <label className="block text-sm font-medium mb-2">
+                        Persona Name <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={personaName}
+                        onChange={(e) => setPersonaName(e.target.value)}
+                        placeholder="Enter persona name"
+                        required
+                        className={`w-full px-4 py-3 ${
+                          theme === "dark"
+                            ? "bg-gray-800 border-gray-700"
+                            : "bg-gray-50 border-gray-300"
+                        } border rounded-lg focus:ring-2 focus:ring-purple-500 outline-none`}
+                      />
+                    </div>
+
+                    {/* Description */}
+                    <div>
+                      <label className="block text-sm font-medium mb-2">
+                        Description{" "}
+                        <span className="text-gray-400">(optional)</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={personaDescription}
+                        onChange={(e) => setPersonaDescription(e.target.value)}
+                        placeholder="Brief description"
+                        className={`w-full px-4 py-3 ${
+                          theme === "dark"
+                            ? "bg-gray-800 border-gray-700"
+                            : "bg-gray-50 border-gray-300"
+                        } border rounded-lg focus:ring-2 focus:ring-purple-500 outline-none`}
+                      />
+                    </div>
+
+                    {/* Persona Role */}
+                    <div>
+                      <label className="block text-sm font-medium mb-2">
+                        Persona Role{" "}
+                        <span className="text-gray-400">(optional)</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={personaRole}
+                        onChange={(e) => setPersonaRole(e.target.value)}
+                        placeholder="e.g., Customer Support Agent"
+                        className={`w-full px-4 py-3 ${
+                          theme === "dark"
+                            ? "bg-gray-800 border-gray-700"
+                            : "bg-gray-50 border-gray-300"
+                        } border rounded-lg focus:ring-2 focus:ring-purple-500 outline-none`}
+                      />
+                    </div>
+
+                    {/* System Prompt */}
+                    <div>
+                      <label className="block text-sm font-medium mb-2 flex items-center gap-2">
+                        System Prompt <span className="text-red-500">*</span>
+                        <Info size={14} className="text-gray-400" />
+                      </label>
+                      <textarea
+                        value={systemPrompt}
+                        onChange={(e) => setSystemPrompt(e.target.value)}
+                        placeholder="e.g. You are a witty travel guide with deep knowledge of European history and architecture."
+                        rows={6}
+                        required
+                        className={`w-full px-4 py-3 ${
+                          theme === "dark"
+                            ? "bg-gray-800 border-gray-700"
+                            : "bg-gray-50 border-gray-300"
+                        } border rounded-lg focus:ring-2 focus:ring-purple-500 outline-none resize-none`}
+                      />
+                    </div>
+
+                    {/* Persona Context */}
+                    <div>
+                      <label className="block text-sm font-medium mb-2 flex items-center gap-2">
+                        Persona Context{" "}
+                        <span className="text-gray-400">(optional)</span>
+                        <Info size={14} className="text-gray-400" />
+                      </label>
+                      <textarea
+                        value={personaContext}
+                        onChange={(e) => setPersonaContext(e.target.value)}
+                        placeholder="e.g. You are guiding a tour group around Paris..."
+                        rows={4}
+                        className={`w-full px-4 py-3 ${
+                          theme === "dark"
+                            ? "bg-gray-800 border-gray-700"
+                            : "bg-gray-50 border-gray-300"
+                        } border rounded-lg focus:ring-2 focus:ring-purple-500 outline-none resize-none`}
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Right Column - Layers (Locked) */}
+            <div className="space-y-6">
+              <div
+                className={`${
+                  theme === "dark"
+                    ? "bg-gray-900 border-gray-800"
+                    : "bg-white border-gray-200"
+                } rounded-lg border p-6`}
+              >
+                <h2 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-6">
+                  Layers
+                </h2>
+
+                {/* LLM - Locked */}
+                <div
+                  className={`w-full p-4 mb-4 ${
+                    theme === "dark" ? "bg-gray-800" : "bg-gray-50"
+                  } rounded-lg flex items-start gap-3 opacity-60`}
+                >
+                  <Lock
+                    size={18}
+                    className="text-gray-400 mt-1 flex-shrink-0"
+                  />
+                  <div className="flex-1">
+                    <h3 className="text-sm font-medium mb-1">
+                      Language Model (LLM)
+                    </h3>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 leading-relaxed">
+                      Choose your LLM and configure advanced settings like
+                      speculative response speed-ups and tool integrations.
+                    </p>
+                  </div>
+                </div>
+
+                {/* STT - Locked */}
+                <div
+                  className={`w-full p-4 mb-4 ${
+                    theme === "dark" ? "bg-gray-800" : "bg-gray-50"
+                  } rounded-lg flex items-start gap-3 opacity-60`}
+                >
+                  <Lock
+                    size={18}
+                    className="text-gray-400 mt-1 flex-shrink-0"
+                  />
+                  <div className="flex-1">
+                    <h3 className="text-sm font-medium mb-1">
+                      Speech-to-Text (STT)
+                    </h3>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 leading-relaxed">
+                      Configure the selected speech-to-text engine, including
+                      pause, interrupt, and turn-taking settings.
+                    </p>
+                  </div>
+                </div>
+
+                {/* TTS - Locked */}
+                <div
+                  className={`w-full p-4 ${
+                    theme === "dark" ? "bg-gray-800" : "bg-gray-50"
+                  } rounded-lg flex items-start gap-3 opacity-60`}
+                >
+                  <Lock
+                    size={18}
+                    className="text-gray-400 mt-1 flex-shrink-0"
+                  />
+                  <div className="flex-1">
+                    <h3 className="text-sm font-medium mb-1">
+                      Text-to-Speech (TTS)
+                    </h3>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 leading-relaxed">
+                      Configure the selected text-to-speech engine, including
+                      voice, emotion, and custom settings.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Action Buttons - Fixed Bottom */}
+          <div className="fixed bottom-8 right-8 flex items-center gap-4 z-40">
+            {creationType === "persona" && (
+              <button
+                type="button"
+                disabled
+                className="px-6 py-4 bg-gray-200 dark:bg-gray-700 text-gray-400 rounded-xl font-semibold cursor-not-allowed"
+              >
+                Create and Start Conversation
+              </button>
+            )}
+
+            <button
+              type="submit"
+              disabled={loading || !canCreate()}
+              className="px-8 py-4 bg-gradient-to-r from-pink-500 to-purple-600 text-white rounded-xl font-semibold shadow-2xl hover:shadow-3xl disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center gap-3"
+            >
+              {loading ? (
+                <>
+                  <Loader2 className="animate-spin" size={20} />
+                  Creating...
+                </>
+              ) : (
+                <>Create {creationType === "avatar" ? "Replica" : "Persona"}</>
+              )}
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
-  )
+  );
 }
-
-export default CreateAvatar
