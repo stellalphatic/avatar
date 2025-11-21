@@ -84,14 +84,16 @@ export default function FullScreenConversation({
             // ✅ USE PASSED videoElementRef
             <div
               style={{
-                maxWidth: "80vw",
-                maxHeight: "70vh",
+                width: "85vw",
+                maxWidth: "1400px",
+                height: "75vh",
                 background: "#111",
                 borderRadius: 16,
                 overflow: "hidden",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
+                boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.5)",
               }}
             >
               <video
@@ -99,7 +101,14 @@ export default function FullScreenConversation({
                 autoPlay
                 playsInline
                 muted
-                className="w-full h-full object-contain"
+                style={{
+                  width: "100%",
+                  height: "100%",
+                  objectFit: "cover",
+                  //   transform: "scale(1.05)",
+                  transform: "scaleX(1.52)",
+                }}
+                // className="w-full h-full object-cover"
                 onLoadedData={() =>
                   console.log("✅ [FullScreenConversation] Video loaded")
                 }

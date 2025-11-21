@@ -1,9 +1,9 @@
 import { motion } from "framer-motion";
 import { Link } from "react-router-dom";
 import {
-  Twitter,
+  // Twitter,
   Linkedin,
-  Github,
+  // Github,
   Mail,
   MapPin,
   Phone,

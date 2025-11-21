@@ -90,7 +90,7 @@ const AvatarWidget = () => {
                 theme === "dark" ? "text-gray-400" : "text-gray-600"
               }`}
             >
-              <strong>Stay tuned!</strong> We're working hard to bring you the
+              <strong>Stay tuned!</strong> We are working hard to bring you the
               most advanced AI conversation experience.
             </p>
           </div>
