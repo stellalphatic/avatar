@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect} from "react";
 import { useAuth } from "../contexts/AuthContext";
 import { useTheme } from "../contexts/ThemeContext";
 import supabase from "../supabaseClient";
@@ -9,7 +9,6 @@ import {
   AlertTriangle,
   Info,
   Clock,
-  FileCode,
   BookOpen,
   Settings as SettingsIcon,
   Book,
@@ -51,6 +50,11 @@ export default function ConversationStudio() {
   const [error, setError] = useState("");
   const [isFullScreen, setIsFullScreen] = useState(false);
 
+  // ✅ Caching states
+  const [cachedPersonas, setCachedPersonas] = useState(null);
+  const [cachedAvatars, setCachedAvatars] = useState(null);
+
+  // ✅ Get LiveKit hook values
   const {
     isConnected,
     isConnecting,
@@ -59,35 +63,66 @@ export default function ConversationStudio() {
     callDuration,
     isSpeaking,
     messages,
+    room,
     connect,
     disconnect,
     toggleMicrophone,
     videoElementRef,
   } = useLiveKitConversation();
 
-  // Fetch data
+  // ✅ Debug: Log room connection
+  useEffect(() => {
+    if (room) {
+      console.log("[ConversationStudio] Room connected:", {
+        name: room.name,
+        participants: room.remoteParticipants.size,
+      });
+    }
+  }, [room]);
+
+  // ✅ Fetch data with caching
   useEffect(() => {
     const fetchData = async () => {
       if (!user) return;
 
       try {
-        const { data: avatarData } = await supabase
-          .from("avatars")
-          .select("*")
-          .or(`user_id.eq.${user.id},is_public.eq.true,is_stock.eq.true`)
-          .order("is_stock", { ascending: false });
+        // Use cached avatars if available
+        if (cachedAvatars) {
+          setAvatars(cachedAvatars);
+        } else {
+          const { data: avatarData } = await supabase
+            .from("avatars")
+            .select("*")
+            .or(`user_id.eq.${user.id},is_public.eq.true,is_stock.eq.true`)
+            .order("is_stock", { ascending: false });
 
-        setAvatars(avatarData || []);
+          setAvatars(avatarData || []);
+          setCachedAvatars(avatarData || []);
+        }
 
         const {
           data: { session },
         } = await supabase.auth.getSession();
 
         if (session) {
-          const [personaRes, voiceRes, usageRes] = await Promise.all([
-            fetch(`${import.meta.env.VITE_BACKEND_API_URL}/personas`, {
-              headers: { Authorization: `Bearer ${session.access_token}` },
-            }),
+          // Use cached personas if available
+          if (cachedPersonas) {
+            setPersonas(cachedPersonas);
+          } else {
+            const personaRes = await fetch(
+              `${import.meta.env.VITE_BACKEND_API_URL}/personas`,
+              {
+                headers: { Authorization: `Bearer ${session.access_token}` },
+              }
+            );
+            if (personaRes.ok) {
+              const data = await personaRes.json();
+              setPersonas(data.data || []);
+              setCachedPersonas(data.data || []);
+            }
+          }
+
+          const [voiceRes, usageRes] = await Promise.all([
             fetch(`${import.meta.env.VITE_BACKEND_API_URL}/personas/voices`, {
               headers: { Authorization: `Bearer ${session.access_token}` },
             }),
@@ -95,11 +130,6 @@ export default function ConversationStudio() {
               headers: { Authorization: `Bearer ${session.access_token}` },
             }),
           ]);
-
-          if (personaRes.ok) {
-            const data = await personaRes.json();
-            setPersonas(data.data || []);
-          }
 
           if (voiceRes.ok) {
             const data = await voiceRes.json();
@@ -118,7 +148,7 @@ export default function ConversationStudio() {
     };
 
     fetchData();
-  }, [user]);
+  }, [user, cachedAvatars, cachedPersonas]);
 
   const canStartConversation = () => {
     if (!usage) return true;
@@ -195,7 +225,7 @@ export default function ConversationStudio() {
 
       console.log("[ConversationStudio] Token generated successfully");
 
-      // ✅ Pass metadata to LiveKit
+      // Connect to LiveKit
       await connect({
         token: result.data.token,
         wsUrl: result.data.wsUrl,
@@ -253,12 +283,10 @@ export default function ConversationStudio() {
   const getAvatarProfileImage = (avatar) => {
     if (!avatar) return null;
 
-    // Priority: thumbnail_url > image_url
     if (avatar.thumbnail_url) return avatar.thumbnail_url;
     if (avatar.image_url) {
-      // If image_url is a video, show a placeholder
       if (avatar.image_url.match(/\.(mp4|webm|mov)$/i)) {
-        return null; // Will show initials
+        return null;
       }
       return avatar.image_url;
     }
@@ -266,7 +294,7 @@ export default function ConversationStudio() {
     return null;
   };
 
-  // Full-screen view
+  // ✅ Full-screen view
   if (isFullScreen) {
     return (
       <FullScreenConversation
@@ -301,49 +329,51 @@ export default function ConversationStudio() {
           theme === "dark"
             ? "border-gray-800 bg-gray-900"
             : "border-gray-200 bg-white"
-        } px-6 py-4`}
+        } px-6 py-3`}
       >
         <div className="max-w-7xl mx-auto flex items-center justify-between">
-          <h1 className="text-xl font-bold text-gray-900 dark:text-white">
+          <h1 className="text-lg font-semibold text-gray-900 dark:text-white">
             New Conversation
           </h1>
-          <div className="flex items-center gap-6 text-sm text-gray-600 dark:text-gray-400">
+          <div className="flex items-center gap-6 text-xs text-gray-600 dark:text-gray-400">
             <button
-              onClick={() => navigate("/dashboard/history")}
-              className="flex items-center gap-2 hover:text-gray-900 dark:hover:text-white transition-colors"
+              onClick={() => navigate("/dashboard/Conversation/Library")}
+              className="flex items-center gap-1.5 hover:text-gray-900 dark:hover:text-white transition-colors"
             >
-              <Clock size={16} />
+              <Clock size={14} />
               History
             </button>
-            <button className="flex items-center gap-2 hover:text-gray-900 dark:hover:text-white transition-colors">
-              <FileCode size={16} />
-              View Code
-            </button>
-            <button className="flex items-center gap-2 hover:text-gray-900 dark:hover:text-white transition-colors">
-              <BookOpen size={16} />
-              Read Docs
-            </button>
+            <a
+              href="https://docs.metapresence.my"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              <button className="flex items-center gap-1.5 hover:text-gray-900 dark:hover:text-white transition-colors">
+                <BookOpen size={14} />
+                Read Docs
+              </button>
+            </a>
           </div>
         </div>
       </div>
 
       {/* Main Content */}
-      <div className="max-w-7xl mx-auto px-6 py-8">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+      <div className="max-w-7xl mx-auto px-6 py-6">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Left Column - Basics */}
-          <div className="lg:col-span-2 space-y-6">
+          <div className="lg:col-span-2 space-y-5">
             <div
               className={`${
                 theme === "dark"
                   ? "bg-gray-900 border-gray-800"
                   : "bg-white border-gray-200"
-              } rounded-lg border p-6`}
+              } rounded-lg border p-5`}
             >
-              <h2 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-6">
+              <h2 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-5">
                 Basics
               </h2>
 
-              <div className="space-y-6">
+              <div className="space-y-5">
                 {/* Persona */}
                 <div>
                   <label className="block text-sm font-medium text-gray-900 dark:text-white mb-2">
@@ -351,11 +381,11 @@ export default function ConversationStudio() {
                   </label>
                   <button
                     onClick={() => setShowPersonaModal(true)}
-                    className={`w-full px-4 py-3 ${
+                    className={`w-full px-4 py-2.5 ${
                       theme === "dark"
                         ? "bg-gray-800 border-gray-700 hover:border-gray-600"
                         : "bg-gray-50 border-gray-300 hover:border-gray-400"
-                    } border rounded-lg flex items-center justify-between text-left transition-colors`}
+                    } border rounded-lg flex items-center justify-between text-left transition-colors text-sm`}
                   >
                     <span className="text-gray-900 dark:text-white">
                       {selectedPersona
@@ -363,13 +393,13 @@ export default function ConversationStudio() {
                         : "Select persona..."}
                     </span>
                     <ChevronDown
-                      size={20}
+                      size={18}
                       className="text-gray-400 flex-shrink-0"
                     />
                   </button>
                 </div>
 
-                {/* Replica (Avatar) */}
+                {/* Replica (Avatar) & Language */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-900 dark:text-white mb-2">
@@ -377,53 +407,53 @@ export default function ConversationStudio() {
                     </label>
                     <button
                       onClick={() => setShowAvatarModal(true)}
-                      className={`w-full px-4 py-3 ${
+                      className={`w-full px-4 py-2.5 ${
                         theme === "dark"
                           ? "bg-gray-800 border-gray-700 hover:border-gray-600"
                           : "bg-gray-50 border-gray-300 hover:border-gray-400"
                       } border rounded-lg flex items-center justify-between text-left transition-colors`}
                     >
                       {selectedAvatar ? (
-                        <div className="flex items-center gap-3 min-w-0">
+                        <div className="flex items-center gap-2 min-w-0">
                           {getAvatarProfileImage(selectedAvatar) ? (
                             <img
                               src={getAvatarProfileImage(selectedAvatar)}
                               alt={selectedAvatar.name}
-                              className="w-8 h-8 rounded-full object-cover flex-shrink-0"
+                              className="w-7 h-7 rounded-full object-cover flex-shrink-0"
                               onError={(e) => {
                                 e.target.style.display = "none";
                               }}
                             />
                           ) : (
-                            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-white text-sm font-semibold flex-shrink-0">
+                            <div className="w-7 h-7 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-white text-xs font-semibold flex-shrink-0">
                               {selectedAvatar.name.charAt(0).toUpperCase()}
                             </div>
                           )}
-                          <span className="text-gray-900 dark:text-white truncate">
+                          <span className="text-sm text-gray-900 dark:text-white truncate">
                             {selectedAvatar.name}
                           </span>
                         </div>
                       ) : (
-                        <span className="text-gray-900 dark:text-white">
+                        <span className="text-sm text-gray-900 dark:text-white">
                           Select replica...
                         </span>
                       )}
                       <ChevronDown
-                        size={20}
+                        size={18}
                         className="text-gray-400 flex-shrink-0 ml-2"
                       />
                     </button>
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-900 dark:text-white mb-2 flex items-center gap-2">
-                      Conversation Language
-                      <Info size={14} className="text-gray-400" />
+                    <label className="block text-sm font-medium text-gray-900 dark:text-white mb-2 flex items-center gap-1.5">
+                      Language
+                      <Info size={13} className="text-gray-400" />
                     </label>
                     <select
                       value={language}
                       onChange={(e) => setLanguage(e.target.value)}
-                      className={`w-full px-4 py-3 ${
+                      className={`w-full px-4 py-2.5 text-sm ${
                         theme === "dark"
                           ? "bg-gray-800 border-gray-700"
                           : "bg-gray-50 border-gray-300"
@@ -442,14 +472,14 @@ export default function ConversationStudio() {
                 <div>
                   <label className="block text-sm font-medium text-gray-900 dark:text-white mb-2">
                     Conversation Name{" "}
-                    <span className="text-gray-400">(optional)</span>
+                    <span className="text-xs text-gray-400">(optional)</span>
                   </label>
                   <input
                     type="text"
                     value={conversationName}
                     onChange={(e) => setConversationName(e.target.value)}
                     placeholder="e.g., Customer Support Demo"
-                    className={`w-full px-4 py-3 ${
+                    className={`w-full px-4 py-2.5 text-sm ${
                       theme === "dark"
                         ? "bg-gray-800 border-gray-700"
                         : "bg-gray-50 border-gray-300"
@@ -461,14 +491,14 @@ export default function ConversationStudio() {
                 <div>
                   <label className="block text-sm font-medium text-gray-900 dark:text-white mb-2">
                     Custom Greeting{" "}
-                    <span className="text-gray-400">(optional)</span>
+                    <span className="text-xs text-gray-400">(optional)</span>
                   </label>
                   <input
                     type="text"
                     value={customGreeting}
                     onChange={(e) => setCustomGreeting(e.target.value)}
                     placeholder="e.g., Hi there, welcome to our demo!"
-                    className={`w-full px-4 py-3 ${
+                    className={`w-full px-4 py-2.5 text-sm ${
                       theme === "dark"
                         ? "bg-gray-800 border-gray-700"
                         : "bg-gray-50 border-gray-300"
@@ -478,17 +508,17 @@ export default function ConversationStudio() {
 
                 {/* Conversation Context */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-900 dark:text-white mb-2 flex items-center gap-2">
+                  <label className="block text-sm font-medium text-gray-900 dark:text-white mb-2 flex items-center gap-1.5">
                     Conversation Context{" "}
-                    <span className="text-gray-400">(optional)</span>
-                    <Info size={14} className="text-gray-400" />
+                    <span className="text-xs text-gray-400">(optional)</span>
+                    <Info size={13} className="text-gray-400" />
                   </label>
                   <textarea
                     value={conversationContext}
                     onChange={(e) => setConversationContext(e.target.value)}
                     placeholder="Describe the context, e.g., 'This is a product demo for new customers'"
-                    rows={4}
-                    className={`w-full px-4 py-3 ${
+                    rows={3}
+                    className={`w-full px-4 py-2.5 text-sm ${
                       theme === "dark"
                         ? "bg-gray-800 border-gray-700"
                         : "bg-gray-50 border-gray-300"
@@ -500,29 +530,29 @@ export default function ConversationStudio() {
           </div>
 
           {/* Right Column - Properties */}
-          <div className="space-y-6">
+          <div className="space-y-5">
             <div
               className={`${
                 theme === "dark"
                   ? "bg-gray-900 border-gray-800"
                   : "bg-white border-gray-200"
-              } rounded-lg border p-6`}
+              } rounded-lg border p-5`}
             >
-              <h2 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-6">
+              <h2 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-5">
                 Properties
               </h2>
 
               {/* Properties Link */}
               <button
-                className={`w-full p-4 ${
+                className={`w-full p-3.5 ${
                   theme === "dark"
                     ? "bg-gray-800 hover:bg-gray-750"
                     : "bg-gray-50 hover:bg-gray-100"
-                } rounded-lg flex items-start justify-between transition-colors mb-6`}
+                } rounded-lg flex items-start justify-between transition-colors mb-5`}
               >
-                <div className="flex items-start gap-3 text-left">
+                <div className="flex items-start gap-2.5 text-left">
                   <SettingsIcon
-                    size={20}
+                    size={18}
                     className="text-gray-400 mt-0.5 flex-shrink-0"
                   />
                   <div>
@@ -536,18 +566,18 @@ export default function ConversationStudio() {
                   </div>
                 </div>
                 <ChevronDown
-                  size={16}
+                  size={15}
                   className="text-gray-400 mt-1 flex-shrink-0 rotate-[-90deg]"
                 />
               </button>
 
               {/* Audio-Only Toggle */}
               <div
-                className={`p-4 ${
+                className={`p-3.5 ${
                   theme === "dark" ? "bg-gray-800" : "bg-gray-50"
-                } rounded-lg mb-6`}
+                } rounded-lg mb-5`}
               >
-                <div className="flex items-start justify-between mb-2">
+                <div className="flex items-start justify-between mb-1.5">
                   <h3 className="text-sm font-medium text-gray-900 dark:text-white">
                     Audio-Only
                   </h3>
@@ -558,7 +588,7 @@ export default function ConversationStudio() {
                       onChange={(e) => setAudioOnly(e.target.checked)}
                       className="sr-only peer"
                     />
-                    <div className="w-11 h-6 bg-gray-300 dark:bg-gray-700 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-purple-500 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-purple-600"></div>
+                    <div className="w-10 h-5 bg-gray-300 dark:bg-gray-700 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-purple-500 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-purple-600"></div>
                   </label>
                 </div>
                 <p className="text-xs text-gray-500 dark:text-gray-400 leading-relaxed">
@@ -569,7 +599,7 @@ export default function ConversationStudio() {
 
               {/* Usage Stats */}
               {usage && (
-                <div className="mb-6">
+                <div className="mb-5">
                   <h3 className="text-sm font-medium text-gray-900 dark:text-white mb-3">
                     Usage
                   </h3>
@@ -583,9 +613,9 @@ export default function ConversationStudio() {
                         {usage.conversation.total}
                       </span>
                     </div>
-                    <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                    <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-1.5">
                       <div
-                        className="bg-purple-600 h-2 rounded-full transition-all"
+                        className="bg-purple-600 h-1.5 rounded-full transition-all"
                         style={{
                           width: `${
                             (usage.conversation.remaining /
@@ -600,26 +630,26 @@ export default function ConversationStudio() {
               )}
 
               {/* Memories - Coming Soon */}
-              <div className="mb-6">
+              <div className="mb-5">
                 <h3 className="text-sm font-medium text-gray-900 dark:text-white mb-2">
                   Memories
                 </h3>
-                <p className="text-xs text-gray-500 dark:text-gray-400 mb-3 leading-relaxed">
+                <p className="text-xs text-gray-500 dark:text-gray-400 mb-2.5 leading-relaxed">
                   Allow your persona to remember and recall information from
                   conversations based on a provided tag value.
                 </p>
                 <button
                   disabled
-                  className={`w-full px-4 py-3 ${
+                  className={`w-full px-4 py-2.5 text-sm ${
                     theme === "dark"
                       ? "bg-gray-800 border-gray-700"
                       : "bg-gray-50 border-gray-300"
                   } border rounded-lg flex items-center justify-between text-left opacity-50 cursor-not-allowed`}
                 >
-                  <span className="text-sm text-gray-500 dark:text-gray-400">
+                  <span className="text-xs text-gray-500 dark:text-gray-400">
                     Select memories or type to add custom...
                   </span>
-                  <ChevronDown size={16} className="text-gray-400" />
+                  <ChevronDown size={15} className="text-gray-400" />
                 </button>
               </div>
 
@@ -627,7 +657,7 @@ export default function ConversationStudio() {
               <div>
                 <div className="flex items-start justify-between mb-2">
                   <div className="flex items-start gap-2">
-                    <Book size={18} className="text-gray-400 mt-0.5" />
+                    <Book size={16} className="text-gray-400 mt-0.5" />
                     <div>
                       <h3 className="text-sm font-medium text-gray-900 dark:text-white">
                         Knowledge Base
@@ -640,7 +670,7 @@ export default function ConversationStudio() {
                   </div>
                   <button
                     disabled
-                    className="px-3 py-1.5 text-xs font-medium text-gray-400 border border-gray-300 dark:border-gray-700 rounded-lg opacity-50 cursor-not-allowed"
+                    className="px-3 py-1.5 text-xs font-medium text-gray-400 border border-gray-300 dark:border-gray-700 rounded-lg opacity-50 cursor-not-allowed flex-shrink-0"
                   >
                     Add
                   </button>
@@ -652,9 +682,9 @@ export default function ConversationStudio() {
 
         {/* Error Display */}
         {(error || livekitError) && (
-          <div className="mt-6 max-w-7xl mx-auto">
+          <div className="mt-5 max-w-7xl mx-auto">
             <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 px-4 py-3 rounded-lg flex items-center gap-3">
-              <AlertTriangle size={20} className="flex-shrink-0" />
+              <AlertTriangle size={18} className="flex-shrink-0" />
               <span className="text-sm">{error || livekitError}</span>
             </div>
           </div>
@@ -670,17 +700,17 @@ export default function ConversationStudio() {
               !canStartConversation() ||
               isConnecting
             }
-            className="px-8 py-4 bg-gradient-to-r from-pink-500 to-purple-600 text-white rounded-xl font-semibold shadow-2xl hover:shadow-3xl disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center gap-3 text-base hover:scale-105 active:scale-95"
+            className="px-7 py-3.5 bg-gradient-to-r from-pink-500 to-purple-600 text-white rounded-xl font-semibold shadow-2xl hover:shadow-3xl disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center gap-2.5 text-sm hover:scale-105 active:scale-95"
           >
             {isConnecting ? (
               <>
-                <Loader2 className="animate-spin" size={20} />
+                <Loader2 className="animate-spin" size={18} />
                 Creating...
               </>
             ) : (
               <>
                 Create Conversation
-                <ChevronDown className="rotate-[-90deg]" size={18} />
+                <ChevronDown className="rotate-[-90deg]" size={16} />
               </>
             )}
           </button>

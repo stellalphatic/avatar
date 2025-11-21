@@ -53,10 +53,10 @@ const Navbar = () => {
             <motion.img
               src="/MetaPresence.png" // Path to your favicon in the public folder
               alt="MetaPresence Favicon"
-              className="w-8 h-8 rounded-full shadow-lg"
-              initial={{ rotate: 0 }}
-              animate={{ rotate: 360 }} // Subtle continuous rotation for brand
-              transition={{ repeat: Number.POSITIVE_INFINITY, duration: 10, ease: "linear" }}
+              className="w-10 h-8 rounded-full shadow-lg"
+              // initial={{ rotate: 0 }}
+              // animate={{ rotate: 360 }} // Subtle continuous rotation for brand
+              // transition={{ repeat: Number.POSITIVE_INFINITY, duration: 10, ease: "linear" }}
             />
             <span className="text-2xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">
               METAPRESENCE

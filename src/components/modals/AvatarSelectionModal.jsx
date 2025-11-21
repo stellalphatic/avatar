@@ -1,6 +1,6 @@
-import { X, Search, Plus, Sparkles, User } from "lucide-react";
+import { X, Search, Plus, User } from "lucide-react";
 import PropTypes from "prop-types";
-import { useState } from "react";
+import { useState, useMemo, useRef } from "react";
 
 export default function AvatarSelectionModal({
   isOpen,
@@ -14,21 +14,32 @@ export default function AvatarSelectionModal({
   const [activeTab, setActiveTab] = useState("all");
   const [searchTerm, setSearchTerm] = useState("");
 
+  // ✅ Move useMemo BEFORE the early return
+  const filteredAvatars = useMemo(() => {
+    if (!avatars) return [];
+
+    return avatars.filter((avatar) => {
+      const matchesSearch = avatar.name
+        ?.toLowerCase()
+        .includes(searchTerm.toLowerCase());
+      const matchesTab =
+        activeTab === "all" ||
+        (activeTab === "stock" && avatar.is_stock) ||
+        (activeTab === "personal" && !avatar.is_stock && !avatar.is_public);
+      return matchesSearch && matchesTab;
+    });
+  }, [avatars, searchTerm, activeTab]);
+
+  const stockAvatars = useMemo(() => {
+    return avatars?.filter((a) => a.is_stock) || [];
+  }, [avatars]);
+
+  const personalAvatars = useMemo(() => {
+    return avatars?.filter((a) => !a.is_stock && !a.is_public) || [];
+  }, [avatars]);
+
+  // ✅ NOW it's safe to return early
   if (!isOpen) return null;
-
-  const filteredAvatars = avatars.filter((avatar) => {
-    const matchesSearch = avatar.name
-      .toLowerCase()
-      .includes(searchTerm.toLowerCase());
-    const matchesTab =
-      activeTab === "all" ||
-      (activeTab === "stock" && avatar.is_stock) ||
-      (activeTab === "personal" && !avatar.is_stock && !avatar.is_public);
-    return matchesSearch && matchesTab;
-  });
-
-  const stockAvatars = avatars.filter((a) => a.is_stock);
-  const personalAvatars = avatars.filter((a) => !a.is_stock && !a.is_public);
 
   return (
     <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fadeIn">
@@ -261,29 +272,39 @@ export default function AvatarSelectionModal({
 }
 
 function AvatarGridCard({ avatar, isSelected, onSelect }) {
+  const videoRef = useRef(null);
+
+  const handleMouseEnter = () => {
+    if (videoRef.current && avatar.idle_video_url) {
+      videoRef.current.play().catch(() => {});
+    }
+  };
+
+  const handleMouseLeave = () => {
+    if (videoRef.current && avatar.idle_video_url) {
+      videoRef.current.pause();
+      videoRef.current.currentTime = 0;
+    }
+  };
+
   return (
     <div
       onClick={onSelect}
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
       className={`group relative rounded-xl overflow-hidden cursor-pointer transition-all ${
         isSelected ? "ring-4 ring-purple-500" : ""
       }`}
     >
-      {avatar.is_stock && (
-        <div className="absolute top-2 right-2 z-10">
-          <span className="bg-gradient-to-r from-purple-500 to-pink-500 text-white text-xs px-2 py-1 rounded-full flex items-center gap-1">
-            <Sparkles size={12} />
-            PRO
-          </span>
-        </div>
-      )}
-
       <div className="aspect-video overflow-hidden bg-gray-200 dark:bg-gray-700">
         {avatar.idle_video_url ? (
           <video
+            ref={videoRef}
             src={avatar.idle_video_url}
             className="w-full h-full object-cover group-hover:scale-110 transition-transform"
             muted
             loop
+            playsInline
           />
         ) : (
           <img
@@ -294,9 +315,7 @@ function AvatarGridCard({ avatar, isSelected, onSelect }) {
         )}
       </div>
 
-      <div
-        className={`absolute inset-0 bg-gradient-to-t from-black/80 to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-end justify-center pb-4`}
-      >
+      <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-end justify-center pb-4">
         <span className="text-white font-semibold">{avatar.name}</span>
       </div>
     </div>

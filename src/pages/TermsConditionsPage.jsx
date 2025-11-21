@@ -1,73 +1,340 @@
-import React from 'react';
+import { useTheme } from "../contexts/ThemeContext";
+import { motion } from "framer-motion";
+import {
+  FileText,
+  AlertCircle,
+  Scale,
+  UserX,
+  CreditCard,
+  Lock,
+} from "lucide-react";
+import Navbar from "../components/Navbar";
+import Footer from "../components/Footer";
 
-const termsConditionsContent = `
-    <h1 class="text-3xl font-bold text-gray-900 dark:text-white mb-6">Terms and Conditions</h1>
-    <p class="text-sm text-gray-500 dark:text-gray-400 mb-6">Last Updated: August 4, 2025</p>
-    <h3 class="text-xl font-bold mb-3">1. Accounts</h3>
-    <p>When you create an account with us, you guarantee that you are above the age of 18 and that the information you provide us is accurate, complete, and current at all times. Inaccurate, incomplete, or obsolete information may result in the immediate termination of your account on the Service.</p>
-    <p>You are responsible for maintaining the confidentiality of your account and password, including but not limited to the restriction of access to your computer and/or account. You agree to accept responsibility for any and all activities or actions that occur under your account and/or password, whether your password is with our Service or a third-party service. You must notify us immediately upon becoming aware of any breach of security or unauthorized use of your account.</p>
-    <h3 class="text-xl font-bold mb-3">2. Services Description</h3>
-    <p>Metapresence provides an AI Digital Twin platform that enables users to create and deploy interactive, hyper-realistic AI avatars. Our Service allows you to:</p>
-    <ul class="list-disc list-inside space-y-1 mb-4">
-        <li>Build and customize AI Digital Twins.</li>
-        <li>Upload and integrate specialized knowledge bases to train your AI.</li>
-        <li>Engage in conversational interactions with end-users via your AI Digital Twin.</li>
-        <li>(Add any other core features specific to Metapresence, e.g., analytics, integrations)</li>
-    </ul>
-    <h3 class="text-xl font-bold mb-3">3. User Responsibilities & Prohibited Uses</h3>
-    <p>You agree to use the Service only for lawful purposes and in a way that does not infringe the rights of, restrict, or inhibit anyone else's use and enjoyment of the Service. Specifically, you agree not to:</p>
-    <ul class="list-disc list-inside space-y-1 mb-4">
-        <li><strong>Provide Unlawful Content:</strong> Upload, transmit, or otherwise provide any content for your AI's knowledge base or through your use of the Service that is unlawful, harmful, threatening, abusive, harassing, defamatory, vulgar, obscene, libelous, invasive of another's privacy, hateful, or racially, ethnically, or otherwise objectionable.</li>
-        <li><strong>Impersonation:</strong> Use the Service to impersonate any person or entity, or falsely state or otherwise misrepresent your affiliation with a person or entity.</li>
-        <li><strong>Intellectual Property Infringement:</strong> Upload or use any content (including but not limited to text, images, audio, or video for your AI's appearance or knowledge base) that you do not have the legal right to use or that infringes on the intellectual property rights (copyright, trademark, patent, trade secret) of others.</li>
-        <li><strong>Malicious Use:</strong> Transmit any viruses, worms, defects, Trojan horses, or any items of a destructive nature.</li>
-        <li><strong>Data Misuse:</strong> Collect or store personal data about other users without their express consent.</li>
-        <li><strong>Spamming/Harassment:</strong> Use the AI Digital Twin for unsolicited commercial communication ("spam") or for any form of harassment, intimidation, or bullying.</li>
-        <li><strong>Violation of Laws:</strong> Use the Service in any manner that violates any applicable local, national, or international law or regulation.</li>
-        <li><strong>Circumvention:</strong> Attempt to interfere with, bypass, or disrupt the integrity or performance of the Service or its related systems or networks.</li>
-    </ul>
-    <p>We reserve the right to remove any content or terminate accounts that violate these Prohibited Uses without prior notice.</p>
-    <h3 class="text-xl font-bold mb-3">4. Intellectual Property</h3>
-    <ul class="list-disc list-inside space-y-1 mb-4">
-        <li><strong>Your Content:</strong> You retain ownership of any content, including knowledge base data, text, images, and audio/video you upload or create using the Service ("Your Content"). By providing Your Content, you grant Metapresence a worldwide, non-exclusive, royalty-free license to use, reproduce, modify, adapt, publish, translate, create derivative works from, distribute, and display Your Content solely for the purpose of operating, improving, and providing the Service to you.</li>
-        <li><strong>Service Intellectual Property:</strong> The Service and its original content (excluding Your Content), features, and functionality are and will remain the exclusive property of Metapresence and its licensors. Our trademarks and trade dress may not be used in connection with any product or service without the prior written consent of Metapresence.</li>
-    </ul>
-    <h3 class="text-xl font-bold mb-3">5. Fees and Payment</h3>
-    <p>Access to certain features of the Service may require a paid subscription. Details of subscription plans, pricing, and features are available on our website.</p>
-    <p>By subscribing to a paid plan, you agree to pay Metapresence the specified fees. All fees are in [Your Currency, e.g., MYR/USD] and are non-refundable unless otherwise stated in your specific agreement or by law.</p>
-    <p>Payments are billed in advance on a [e.g., monthly, annual] recurring basis. Your subscription will automatically renew unless you cancel it before the end of the current billing period.</p>
-    <p>Metapresence reserves the right to change its fees at any time, upon reasonable prior notice posted on our website or sent to you via email.</p>
-    <h3 class="text-xl font-bold mb-3">6. Disclaimer of Warranties</h3>
-    <p>Your use of the Service is at your sole risk. The Service is provided on an "AS IS" and "AS AVAILABLE" basis. The Service is provided without warranties of any kind, whether express or implied, including, but not limited to, implied warranties of merchantability, fitness for a particular purpose, non-infringement, or course of performance.</p>
-    <p>Metapresence does not warrant that a) the Service will function uninterrupted, secure, or available at any particular time or location; b) any errors or defects will be corrected; c) the Service is free of viruses or other harmful components; or d) the results of using the Service will meet your requirements.</p>
-    <h3 class="text-xl font-bold mb-3">7. Limitation of Liability</h3>
-    <p>In no event shall Metapresence, nor its directors, employees, partners, agents, suppliers, or affiliates, be liable for any indirect, incidental, special, consequential, or punitive damages, including without limitation, loss of profits, data, use, goodwill, or other intangible losses, resulting from (i) your access to or use of or inability to access or use the Service; (ii) any conduct or content of any third party on the Service; (iii) any content obtained from the Service; and (iv) unauthorized access, use or alteration of your transmissions or content, whether based on warranty, contract, tort (including negligence) or any other legal theory, whether or not we have been informed of the possibility of such damage, and even if a remedy set forth herein is found to have failed of its essential purpose.</p>
-    <h3 class="text-xl font-bold mb-3">8. Indemnification</h3>
-    <p>You agree to defend, indemnify, and hold harmless Metapresence and its licensee and licensors, and their employees, contractors, agents, officers, and directors, from and against any and all claims, damages, obligations, losses, liabilities, costs or debt, and expenses (including but not limited to attorney's fees), resulting from or arising out of a) your use and access of the Service, by you or any person using your account and password; b) a breach of these Terms; or c) content posted by you on the Service.</p>
-    <h3 class="text-xl font-bold mb-3">9. Termination</h3>
-    <p>We may terminate or suspend your account and bar access to the Service immediately, without prior notice or liability, under our sole discretion, for any reason whatsoever and without limitation, including but not limited to a breach of the Terms.</p>
-    <p>If you wish to terminate your account, you may simply discontinue using the Service or contact us to formally close your account.</p>
-    <p>All provisions of the Terms which by their nature should survive termination shall survive termination, including, without limitation, ownership provisions, warranty disclaimers, indemnity, and limitations of liability.</p>
-    <h3 class="text-xl font-bold mb-3">10. Governing Law</h3>
-    <p>These Terms shall be governed and construed in accordance with the laws of [Your Country/State, e.g., Malaysia], without regard to its conflict of law provisions.</p>
-    <p>Our failure to enforce any right or provision of these Terms will not be considered a waiver of those rights. If any provision of these Terms is held to be invalid or unenforceable by a court, the remaining provisions of these Terms will remain in effect. These Terms constitute the entire agreement between us regarding our Service, and supersede and replace any prior agreements we might have had between us regarding the Service.</p>
-    <h3 class="text-xl font-bold mb-3">11. Changes to These Terms</h3>
-    <p>We reserve the right, at our sole discretion, to modify or replace these Terms at any time. If a revision is material, we will provide at least 30 days' notice prior to any new terms taking effect. What constitutes a material change will be determined at our sole discretion.</p>
-    <p>By continuing to access or use our Service after any revisions become effective, you agree to be bound by the revised terms. If you do not agree to the new terms, you are no longer authorized to use the Service.</p>
-    <h3 class="text-xl font-bold mb-3">12. Contact Us</h3>
-    <p>If you have any questions about these Terms, please contact us:</p>
-    <ul class="list-disc list-inside space-y-1">
-        <li>By email: support@metapresence.my</li>
-        <li>By visiting this page on our website: <a href="https://metapresence.my/contact" class="text-purple-500 hover:underline" target="_blank" rel="noopener noreferrer">metapresence.my/contact</a></li>
-    </ul>
-    `;
+export default function TermsConditionsPage() {
+  const { theme } = useTheme();
 
-const TermsConditionsPage = () => {
+  const sections = [
+    {
+      icon: <FileText className="w-6 h-6" />,
+      title: "About MetaPresence",
+      content:
+        "MetaPresence provides tools for businesses, professionals, and creators worldwide to generate and deploy AI digital avatars and digital twins, automating tasks like product demos, onboarding, and customer support.",
+    },
+    {
+      icon: <UserX className="w-6 h-6" />,
+      title: "Eligibility & User Accounts",
+      points: [
+        "You must be at least 18 years old to use MetaPresence",
+        "Users must provide accurate, current information and maintain confidentiality of account credentials",
+        "You are responsible for all activity on your account",
+      ],
+    },
+    {
+      icon: <AlertCircle className="w-6 h-6" />,
+      title: "Acceptable Use",
+      points: [
+        "You may not upload content, images, or voice samples you do not own or do not have explicit, written consent to use",
+        "You may not upload or generate avatars of anyone under 18, public figures, or anyone without their explicit consent",
+        "You may not use MetaPresence to harass, defraud, impersonate, or harm others",
+        "All use must comply with our Acceptable Use Policy and Consent & Moderation Policy",
+      ],
+    },
+    {
+      icon: <Scale className="w-6 h-6" />,
+      title: "User Content & Rights",
+      points: [
+        "You retain rights to all content you upload (images, audio, video, etc.)",
+        "By using our Service, you grant MetaPresence a non-exclusive, worldwide license to use, process, and generate output from your content as needed to deliver services",
+        "We do not sell or license user images or avatars to third parties for unrelated purposes",
+      ],
+    },
+    {
+      icon: <FileText className="w-6 h-6" />,
+      title: "Generated Content & Service Delivery",
+      points: [
+        "All digital avatars, voice outputs, and related AI-generated content are provided 'as is.' Output may not always be entirely accurate or realistic",
+        "Delivery times for digital products may vary based on current demand and processing capacity",
+        "You are responsible for compliance and lawful use of all generated content",
+      ],
+    },
+    {
+      icon: <CreditCard className="w-6 h-6" />,
+      title: "Payments & Refunds",
+      points: [
+        "All payments are processed securely via approved payment providers. MetaPresence does not directly store credit card information",
+        "See our Refund Policy for eligibility and process",
+        "All prices and fees are stated clearly on our Pricing page",
+      ],
+    },
+    {
+      icon: <Lock className="w-6 h-6" />,
+      title: "Privacy & Data Security",
+      points: [
+        "MetaPresence is committed to safeguarding your privacy and personal data. Details on data collection and protection are set in our Privacy Policy",
+        "We use industry-standard security protocols, but no system is 100% secure. Use strong passwords and safeguard your account credentials",
+      ],
+    },
+  ];
+
   return (
-    <div className="container mx-auto p-8 bg-white dark:bg-gray-800 rounded-lg shadow-md my-8 text-gray-800 dark:text-gray-200">
-      <div dangerouslySetInnerHTML={{ __html: termsConditionsContent }} />
+    <div
+      className={`min-h-screen ${
+        theme === "dark" ? "bg-gray-950" : "bg-gray-50"
+      }`}
+    >
+      <Navbar />
+
+      {/* Hero Section */}
+      <section
+        className={`pt-32 pb-20 px-4 ${
+          theme === "dark"
+            ? "bg-gradient-to-br from-purple-900/20 to-pink-900/20"
+            : "bg-gradient-to-br from-purple-50 to-pink-50"
+        }`}
+      >
+        <div className="max-w-4xl mx-auto text-center">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6 }}
+          >
+            <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-gradient-to-br from-purple-600 to-pink-600 mb-6">
+              <Scale className="w-10 h-10 text-white" />
+            </div>
+            <h1 className="text-5xl md:text-6xl font-bold mb-6">
+              <span className="bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">
+                Terms of Service
+              </span>
+            </h1>
+            <p
+              className={`text-xl ${
+                theme === "dark" ? "text-gray-300" : "text-gray-600"
+              }`}
+            >
+              Last updated: November 21, 2025
+            </p>
+            <p
+              className={`text-lg mt-4 ${
+                theme === "dark" ? "text-gray-400" : "text-gray-600"
+              }`}
+            >
+              Welcome to MetaPresence! These Terms of Service govern your use of
+              our AI-powered digital avatar platform. By using MetaPresence, you
+              agree to these Terms and our Privacy Policy.
+            </p>
+          </motion.div>
+        </div>
+      </section>
+
+      {/* Content Sections */}
+      <section className="py-20 px-4">
+        <div className="max-w-4xl mx-auto space-y-16">
+          {sections.map((section, index) => (
+            <motion.div
+              key={index}
+              initial={{ opacity: 0, y: 30 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.6, delay: index * 0.1 }}
+              className={`p-8 rounded-2xl ${
+                theme === "dark"
+                  ? "bg-gray-900 border border-gray-800"
+                  : "bg-white shadow-lg"
+              }`}
+            >
+              <div className="flex items-start gap-4 mb-6">
+                <div
+                  className={`p-3 rounded-xl ${
+                    theme === "dark" ? "bg-purple-900/30" : "bg-purple-100"
+                  } text-purple-600`}
+                >
+                  {section.icon}
+                </div>
+                <h2
+                  className={`text-3xl font-bold ${
+                    theme === "dark" ? "text-white" : "text-gray-900"
+                  }`}
+                >
+                  {section.title}
+                </h2>
+              </div>
+
+              {section.content && (
+                <p
+                  className={`text-lg ${
+                    theme === "dark" ? "text-gray-300" : "text-gray-700"
+                  }`}
+                >
+                  {section.content}
+                </p>
+              )}
+
+              {section.points && (
+                <ul className="space-y-3">
+                  {section.points.map((point, pointIndex) => (
+                    <li key={pointIndex} className="flex items-start gap-3">
+                      <span className="flex-shrink-0 w-1.5 h-1.5 rounded-full bg-purple-600 mt-2"></span>
+                      <span
+                        className={`text-lg ${
+                          theme === "dark" ? "text-gray-300" : "text-gray-700"
+                        }`}
+                      >
+                        {point}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </motion.div>
+          ))}
+
+          {/* Additional Sections */}
+          <motion.div
+            initial={{ opacity: 0, y: 30 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            className={`p-8 rounded-2xl ${
+              theme === "dark"
+                ? "bg-gray-900 border border-gray-800"
+                : "bg-white shadow-lg"
+            }`}
+          >
+            <h2
+              className={`text-3xl font-bold mb-6 ${
+                theme === "dark" ? "text-white" : "text-gray-900"
+              }`}
+            >
+              Account Suspension & Termination
+            </h2>
+            <ul className="space-y-3">
+              <li className="flex items-start gap-3">
+                <span className="flex-shrink-0 w-1.5 h-1.5 rounded-full bg-purple-600 mt-2"></span>
+                <span
+                  className={`text-lg ${
+                    theme === "dark" ? "text-gray-300" : "text-gray-700"
+                  }`}
+                >
+                  MetaPresence reserves the right to suspend or terminate any
+                  account that violates these Terms, our Acceptable Use Policy,
+                  or applicable laws
+                </span>
+              </li>
+              <li className="flex items-start gap-3">
+                <span className="flex-shrink-0 w-1.5 h-1.5 rounded-full bg-purple-600 mt-2"></span>
+                <span
+                  className={`text-lg ${
+                    theme === "dark" ? "text-gray-300" : "text-gray-700"
+                  }`}
+                >
+                  Users may delete their account by contacting
+                  support@metapresence.my
+                </span>
+              </li>
+            </ul>
+          </motion.div>
+
+          <motion.div
+            initial={{ opacity: 0, y: 30 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            className={`p-8 rounded-2xl ${
+              theme === "dark"
+                ? "bg-gray-900 border border-gray-800"
+                : "bg-white shadow-lg"
+            }`}
+          >
+            <h2
+              className={`text-3xl font-bold mb-6 ${
+                theme === "dark" ? "text-white" : "text-gray-900"
+              }`}
+            >
+              Disclaimers & Limitations of Liability
+            </h2>
+            <ul className="space-y-3">
+              <li className="flex items-start gap-3">
+                <span className="flex-shrink-0 w-1.5 h-1.5 rounded-full bg-purple-600 mt-2"></span>
+                <span
+                  className={`text-lg ${
+                    theme === "dark" ? "text-gray-300" : "text-gray-700"
+                  }`}
+                >
+                  MetaPresence provides the Service as is and makes no
+                  warranties regarding availability or fitness for a particular
+                  purpose
+                </span>
+              </li>
+              <li className="flex items-start gap-3">
+                <span className="flex-shrink-0 w-1.5 h-1.5 rounded-full bg-purple-600 mt-2"></span>
+                <span
+                  className={`text-lg ${
+                    theme === "dark" ? "text-gray-300" : "text-gray-700"
+                  }`}
+                >
+                  To the maximum extent allowed by law, MetaPresence disclaims
+                  liability for any indirect, incidental, or consequential
+                  damages arising from use or inability to use the Service
+                </span>
+              </li>
+            </ul>
+          </motion.div>
+
+          <motion.div
+            initial={{ opacity: 0, y: 30 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            className={`p-8 rounded-2xl ${
+              theme === "dark"
+                ? "bg-gray-900 border border-gray-800"
+                : "bg-white shadow-lg"
+            }`}
+          >
+            <h2
+              className={`text-3xl font-bold mb-6 ${
+                theme === "dark" ? "text-white" : "text-gray-900"
+              }`}
+            >
+              Governing Law
+            </h2>
+            <p
+              className={`text-lg ${
+                theme === "dark" ? "text-gray-300" : "text-gray-700"
+              }`}
+            >
+              These Terms are governed by the laws of Pakistan, without regard
+              to conflict of law principles.
+            </p>
+          </motion.div>
+
+          {/* Contact Section */}
+          <motion.div
+            initial={{ opacity: 0, y: 30 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            className="p-8 rounded-2xl bg-gradient-to-br from-purple-600 to-pink-600 text-white"
+          >
+            <h2 className="text-3xl font-bold mb-4">Contact & Legal Notices</h2>
+            <p className="text-lg mb-6">
+              If you have any questions or concerns, please contact:
+            </p>
+            <div className="space-y-2 text-lg">
+              <p className="font-semibold">MetaPresence</p>
+              <p>
+                Email:{" "}
+                <a
+                  href="mailto:support@metapresence.my"
+                  className="underline hover:text-purple-200"
+                >
+                  support@metapresence.my
+                </a>
+              </p>
+              <p>Address: Business Incubation Centre, UET Lahore, Pakistan</p>
+            </div>
+          </motion.div>
+        </div>
+      </section>
+
+      <Footer />
     </div>
   );
-};
-
-export default TermsConditionsPage;
+}

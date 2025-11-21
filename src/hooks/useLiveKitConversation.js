@@ -17,6 +17,7 @@ export const useLiveKitConversation = () => {
   const timerRef = useRef(null);
   const conversationIdRef = useRef(null);
   const agentJoinTimeoutRef = useRef(null);
+  const videoAttachRetryRef = useRef({}); // Track retry attempts
 
   // Initialize audio element
   useEffect(() => {
@@ -55,6 +56,75 @@ export const useLiveKitConversation = () => {
       }
     };
   }, [isConnected]);
+
+  /**
+   * Attach video track with retry logic
+   */
+  const attachVideoTrack = (track, trackId, maxRetries = 10) => {
+    const attemptAttach = (retryCount = 0) => {
+      const videoElement = videoElementRef.current;
+
+      if (videoElement) {
+        try {
+          // Detach any existing tracks first
+          track.detach();
+
+          // Attach to element
+          const attachedElement = track.attach(videoElement);
+
+          console.log("[LiveKit] ✅ Video attached to element", {
+            element: attachedElement,
+            videoWidth: videoElement.videoWidth,
+            videoHeight: videoElement.videoHeight,
+            readyState: videoElement.readyState,
+            retryCount,
+          });
+
+          // Force video to be visible
+          videoElement.style.display = "block";
+          videoElement.style.width = "100%";
+          videoElement.style.height = "100%";
+          videoElement.style.objectFit = "contain";
+
+          // Attempt to play
+          videoElement.play().catch((e) => {
+            console.warn("Video autoplay prevented:", e);
+            // User interaction may be required
+          });
+
+          // Listen for video events
+          videoElement.onloadeddata = () => console.log("✅ Video data loaded");
+          videoElement.onplay = () => console.log("✅ Video playing");
+          videoElement.onerror = (e) => console.error("❌ Video error:", e);
+
+          // Clear retry tracker
+          delete videoAttachRetryRef.current[trackId];
+        } catch (e) {
+          console.error("[LiveKit] Error attaching video:", e);
+          if (retryCount < maxRetries) {
+            setTimeout(() => attemptAttach(retryCount + 1), 100);
+          }
+        }
+      } else {
+        if (retryCount < maxRetries) {
+          console.warn(
+            `[LiveKit] Video element not ready, retry ${
+              retryCount + 1
+            }/${maxRetries}`
+          );
+          videoAttachRetryRef.current[trackId] = setTimeout(() => {
+            attemptAttach(retryCount + 1);
+          }, 100);
+        } else {
+          console.error(
+            "[LiveKit] ❌ Video element ref not available after retries"
+          );
+        }
+      }
+    };
+
+    attemptAttach();
+  };
 
   /**
    * Connect to LiveKit room
@@ -151,8 +221,11 @@ export const useLiveKitConversation = () => {
         console.log("[LiveKit] Track subscribed:", {
           kind: track.kind,
           participant: participant.identity,
+          source: publication.source,
+          sid: track.sid,
         });
 
+        // Handle audio from voice agent
         if (track.kind === Track.Kind.Audio) {
           const audioElement = audioElementRef.current;
           if (audioElement) {
@@ -160,24 +233,60 @@ export const useLiveKitConversation = () => {
             console.log("[LiveKit] ✅ Audio attached");
           }
           setIsSpeaking(true);
-        } else if (
+        }
+
+        // Handle video from video-agent
+        else if (
           track.kind === Track.Kind.Video &&
           conversationType === "video"
         ) {
-          const videoElement = videoElementRef.current;
-          if (videoElement) {
-            track.attach(videoElement);
-            console.log("[LiveKit] ✅ Video attached");
+          console.log("[LiveKit] Video track details:", {
+            participant: participant.identity,
+            isVideoAgent: participant.identity.startsWith(
+              "agent-conversation-"
+            ),
+            videoRefExists: !!videoElementRef.current,
+          });
+
+          // Check if this is from video service
+          if (participant.identity.startsWith("agent-conversation-")) {
+            console.log("[LiveKit] ✅ Video agent track detected!");
+
+            // Use retry logic for attachment
+            attachVideoTrack(track, track.sid);
+          } else {
+            console.log("[LiveKit] Ignoring video from:", participant.identity);
           }
         }
       });
 
       // Track unsubscribed
       room.on(RoomEvent.TrackUnsubscribed, (track) => {
+        console.log("[LiveKit] Track unsubscribed:", track.kind);
+
         if (track.kind === Track.Kind.Audio) {
           setIsSpeaking(false);
         }
+
+        // Clear any pending retry timers
+        if (
+          track.kind === Track.Kind.Video &&
+          videoAttachRetryRef.current[track.sid]
+        ) {
+          clearTimeout(videoAttachRetryRef.current[track.sid]);
+          delete videoAttachRetryRef.current[track.sid];
+        }
+
         track.detach();
+      });
+
+      // Track published event
+      room.on(RoomEvent.TrackPublished, (publication, participant) => {
+        console.log("[LiveKit] Track published:", {
+          kind: publication.kind,
+          participant: participant.identity,
+          source: publication.source,
+        });
       });
 
       // Data received
@@ -209,6 +318,7 @@ export const useLiveKitConversation = () => {
       room.on(RoomEvent.ParticipantConnected, (participant) => {
         console.log("[LiveKit] Participant connected:", participant.identity);
 
+        // Check for both voice agent AND video agent
         if (
           participant.identity.includes("agent") ||
           participant.identity.includes("worker")
@@ -254,11 +364,16 @@ export const useLiveKitConversation = () => {
         setIsConnected(false);
         setIsConnecting(false);
         setConnectionStatus("");
+
+        // Clear all retry timers
+        Object.values(videoAttachRetryRef.current).forEach((timer) =>
+          clearTimeout(timer)
+        );
+        videoAttachRetryRef.current = {};
       });
 
       // Connect
       await room.connect(wsUrl, tokenString, {
-        // ✅ Pass metadata to room
         metadata: JSON.stringify(metadata),
       });
       console.log("[LiveKit] ✅ Connected");
@@ -273,8 +388,13 @@ export const useLiveKitConversation = () => {
         console.log("[LiveKit] ✅ Camera enabled");
       }
 
-      // Check for existing agent
+      // Check for existing participants (including video-agent)
       const existingParticipants = Array.from(room.remoteParticipants.values());
+      console.log(
+        "[LiveKit] Existing participants:",
+        existingParticipants.map((p) => p.identity)
+      );
+
       const agentInRoom = existingParticipants.some(
         (p) => p.identity.includes("agent") || p.identity.includes("worker")
       );
@@ -291,6 +411,23 @@ export const useLiveKitConversation = () => {
             timestamp: Date.now(),
           },
         ]);
+
+        // Subscribe to existing tracks
+        existingParticipants.forEach((participant) => {
+          participant.trackPublications.forEach((publication) => {
+            if (publication.track && publication.isSubscribed) {
+              const track = publication.track;
+
+              if (
+                track.kind === Track.Kind.Video &&
+                participant.identity.startsWith("agent-conversation-")
+              ) {
+                console.log("[LiveKit] Attaching existing video track");
+                attachVideoTrack(track, track.sid);
+              }
+            }
+          });
+        });
       } else {
         console.log("[LiveKit] Waiting for agent...");
         setConnectionStatus("Waiting for avatar to join...");
@@ -327,6 +464,12 @@ export const useLiveKitConversation = () => {
       if (agentJoinTimeoutRef.current) {
         clearTimeout(agentJoinTimeoutRef.current);
       }
+
+      // Clear all video retry timers
+      Object.values(videoAttachRetryRef.current).forEach((timer) =>
+        clearTimeout(timer)
+      );
+      videoAttachRetryRef.current = {};
 
       if (roomRef.current) {
         await roomRef.current.disconnect();
@@ -410,6 +553,7 @@ export const useLiveKitConversation = () => {
     callDuration,
     isSpeaking,
     messages,
+    room: roomRef.current,
     audioElementRef,
     videoElementRef,
     connect,

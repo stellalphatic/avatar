@@ -30,6 +30,9 @@ import PricingPage from './pages/PricingPage'; // Full-page pricing
 import PrivacyPolicyPage from './pages/PrivacyPolicyPage';
 import TermsConditionsPage from './pages/TermsConditionsPage';
 
+import RefundPolicyPage from "./pages/RefundPolicyPage";
+import AcceptableUsePolicyPage from "./pages/AcceptableUsePolicyPage";
+
 // Placeholder components for routes not yet fully implemented
 // const ConversationLibraryPage = () => <div className="p-8 text-center text-xl dark:text-gray-200">Conversation Library Coming Soon!</div>;
 // const VideoGenerationPage = () => <div className="p-8 text-center text-xl dark:text-gray-200">Video Generation Coming Soon!</div>;
@@ -45,40 +48,67 @@ function App() {
             <Routes>
               <Route path="/" element={<Home />} />
               <Route path="/auth" element={<AuthPage />} />
-              <Route path="/auth/forgot-password" element={<ForgotPasswordPage />} />
-              <Route path="/auth/update-password" element={<UpdatePasswordPage />} />
-              
+              <Route
+                path="/auth/forgot-password"
+                element={<ForgotPasswordPage />}
+              />
+              <Route
+                path="/auth/update-password"
+                element={<UpdatePasswordPage />}
+              />
               {/* Top-level routes */}
-              <Route path="/pricing" element={<PricingPage />} /> {/* Dedicated Pricing Page */}
+              <Route path="/pricing" element={<PricingPage />} />{" "}
+              {/* Dedicated Pricing Page */}
               <Route path="/privacy-policy" element={<PrivacyPolicyPage />} />
-              <Route path="/terms-conditions" element={<TermsConditionsPage />} />
-
+              <Route
+                path="/terms-conditions"
+                element={<TermsConditionsPage />}
+              />
+              <Route path="/refund-policy" element={<RefundPolicyPage />} />
+              <Route
+                path="/acceptable-use"
+                element={<AcceptableUsePolicyPage />}
+              />
               {/* Protected Dashboard Route with Nested Routes */}
-              <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>}>
+              <Route
+                path="/dashboard"
+                element={
+                  <ProtectedRoute>
+                    <Dashboard />
+                  </ProtectedRoute>
+                }
+              >
                 <Route index element={<DashboardOverview />} />
                 {/* Conversation Routes */}
                 <Route path="chat" element={<ChatWithAvatarPage />} />
-                <Route path="conversation/library" element={<ConversationLibraryPage />} />
-                
+                <Route
+                  path="conversation/library"
+                  element={<ConversationLibraryPage />}
+                />
+
                 {/* Avatar Routes */}
                 <Route path="avatars/create" element={<CreateAvatar />} />
-                <Route path="avatars/my" element={<MyCreations />} /> 
+                <Route path="avatars/my" element={<MyCreations />} />
                 <Route path="avatars/public" element={<PublicGallery />} />
-                <Route path="voices" element={<VoicesPage />} /> 
+                <Route path="voices" element={<VoicesPage />} />
 
                 {/* Video Routes */}
-                <Route path="video/generate" element={<VideoGenerationPage />} />
+                <Route
+                  path="video/generate"
+                  element={<VideoGenerationPage />}
+                />
                 <Route path="video/library" element={<VideoLibraryPage />} />
 
                 {/* Integrations & Settings */}
-                <Route path="integrations" element={<APIManagement />} /> 
-                <Route path="settings" element={<SettingsPage />} /> 
-                
-                
-                {/* Catch-all for undefined dashboard sub-routes, redirects to dashboard home */}
-                <Route path="*" element={<Navigate to="/dashboard" replace />} />
-              </Route>
+                <Route path="integrations" element={<APIManagement />} />
+                <Route path="settings" element={<SettingsPage />} />
 
+                {/* Catch-all for undefined dashboard sub-routes, redirects to dashboard home */}
+                <Route
+                  path="*"
+                  element={<Navigate to="/dashboard" replace />}
+                />
+              </Route>
               {/* Catch-all for undefined top-level routes, redirects to home */}
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>

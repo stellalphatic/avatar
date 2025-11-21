@@ -17,6 +17,7 @@
     "@tailwindcss/postcss": "^4.1.11",
     "clsx": "^2.1.1",
     "framer-motion": "^12.23.3",
+    "gsap": "^3.13.0",
     "howler": "^2.2.4",
     "livekit-client": "^2.15.16",
     "lucide-react": "^0.525.0",

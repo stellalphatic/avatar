@@ -1,6 +1,6 @@
-import { X, Search, Plus, Sparkles, Brain } from "lucide-react";
+import { X, Search, Plus, Brain } from "lucide-react";
 import PropTypes from "prop-types";
-import { useState } from "react";
+import { useState, useMemo } from "react";
 
 export default function PersonaSelectionModal({
   isOpen,
@@ -14,21 +14,32 @@ export default function PersonaSelectionModal({
   const [activeTab, setActiveTab] = useState("all");
   const [searchTerm, setSearchTerm] = useState("");
 
+  // ✅ Move useMemo BEFORE the early return
+  const filteredPersonas = useMemo(() => {
+    if (!personas) return [];
+
+    return personas.filter((persona) => {
+      const matchesSearch = persona.name
+        ?.toLowerCase()
+        .includes(searchTerm.toLowerCase());
+      const matchesTab =
+        activeTab === "all" ||
+        (activeTab === "stock" && persona.is_stock) ||
+        (activeTab === "personal" && !persona.is_stock && !persona.is_public);
+      return matchesSearch && matchesTab;
+    });
+  }, [personas, searchTerm, activeTab]);
+
+  const stockPersonas = useMemo(() => {
+    return personas?.filter((p) => p.is_stock) || [];
+  }, [personas]);
+
+  const personalPersonas = useMemo(() => {
+    return personas?.filter((p) => !p.is_stock && !p.is_public) || [];
+  }, [personas]);
+
+  // ✅ NOW it's safe to return early
   if (!isOpen) return null;
-
-  const filteredPersonas = personas.filter((persona) => {
-    const matchesSearch = persona.name
-      .toLowerCase()
-      .includes(searchTerm.toLowerCase());
-    const matchesTab =
-      activeTab === "all" ||
-      (activeTab === "stock" && persona.is_stock) ||
-      (activeTab === "personal" && !persona.is_stock && !persona.is_public);
-    return matchesSearch && matchesTab;
-  });
-
-  const stockPersonas = personas.filter((p) => p.is_stock);
-  const personalPersonas = personas.filter((p) => !p.is_stock && !p.is_public);
 
   return (
     <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fadeIn">
@@ -225,12 +236,6 @@ function PersonaCard({ persona, isSelected, onSelect, theme }) {
             >
               {persona.name}
             </h3>
-            {persona.is_stock && (
-              <span className="bg-gradient-to-r from-purple-500 to-pink-500 text-white text-xs px-2 py-0.5 rounded-full flex items-center gap-1">
-                <Sparkles size={10} />
-                Stock
-              </span>
-            )}
           </div>
           <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
             {persona.description || persona.persona_role}
@@ -239,11 +244,6 @@ function PersonaCard({ persona, isSelected, onSelect, theme }) {
             {persona.category && (
               <span className="text-xs px-2 py-1 bg-gray-200 dark:bg-gray-700 rounded-full">
                 {persona.category}
-              </span>
-            )}
-            {persona.llm_model && (
-              <span className="text-xs px-2 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 rounded-full">
-                {persona.llm_model}
               </span>
             )}
           </div>

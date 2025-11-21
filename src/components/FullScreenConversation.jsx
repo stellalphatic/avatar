@@ -1,12 +1,6 @@
-import {
-  Square,
-  Mic,
-  MicOff,
-  Volume2,
-  MessageSquare,
-} from "lucide-react";
+import { Square, Mic, MicOff, Volume2, MessageSquare } from "lucide-react";
 import PropTypes from "prop-types";
-import { useRef, useState} from "react";
+import { useEffect, useState } from "react";
 
 export default function FullScreenConversation({
   avatar,
@@ -21,9 +15,17 @@ export default function FullScreenConversation({
   error,
   onEndCall,
   onToggleMicrophone,
+  videoElementRef, // ✅ Use passed ref
 }) {
-  const videoRef = useRef(null);
   const [isMuted, setIsMuted] = useState(false);
+
+  // ✅ Ensure video element is ready
+  useEffect(() => {
+    if (videoElementRef?.current && conversationType === "video") {
+      console.log("[FullScreenConversation] Video element ready");
+      videoElementRef.current.style.display = "block";
+    }
+  }, [videoElementRef, conversationType]);
 
   const formatTime = (seconds) => {
     const mins = Math.floor(seconds / 60);
@@ -79,12 +81,36 @@ export default function FullScreenConversation({
           </div>
         ) : isConnected ? (
           conversationType === "video" ? (
-            <video
-              ref={videoRef}
-              autoPlay
-              playsInline
-              className="w-full h-full object-contain"
-            />
+            // ✅ USE PASSED videoElementRef
+            <div
+              style={{
+                maxWidth: "80vw",
+                maxHeight: "70vh",
+                background: "#111",
+                borderRadius: 16,
+                overflow: "hidden",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <video
+                ref={videoElementRef}
+                autoPlay
+                playsInline
+                muted
+                className="w-full h-full object-contain"
+                onLoadedData={() =>
+                  console.log("✅ [FullScreenConversation] Video loaded")
+                }
+                onPlay={() =>
+                  console.log("✅ [FullScreenConversation] Video playing")
+                }
+                onError={(e) =>
+                  console.error("❌ [FullScreenConversation] Video error:", e)
+                }
+              />
+            </div>
           ) : (
             <div className="text-center">
               <div className="relative inline-block">
@@ -178,5 +204,6 @@ FullScreenConversation.propTypes = {
   error: PropTypes.string,
   onEndCall: PropTypes.func.isRequired,
   onToggleMicrophone: PropTypes.func.isRequired,
+  videoElementRef: PropTypes.object, // ✅ Add this
   theme: PropTypes.string.isRequired,
 };
