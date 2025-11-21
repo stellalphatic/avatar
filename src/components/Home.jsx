@@ -100,7 +100,7 @@ const Home = () => {
       description:
         "Create humanlike conversations with real-time, dynamic voice interactions powered by state-of-the-art AI models.",
       gradient: "from-pink-500 to-red-500",
-      image: "/voice.png",
+      image: "/Images/7.jpeg",
     },
     {
       icon: <Users className="w-10 h-10" />,
@@ -108,7 +108,7 @@ const Home = () => {
       description:
         "Clone voices and create custom AI avatars in minutes. Manage your avatar library and conversation history effortlessly.",
       gradient: "from-blue-500 to-cyan-500",
-      image: "/avatars.png",
+      image: "/Images/1.jpeg",
     },
     {
       icon: <Video className="w-10 h-10" />,
@@ -116,7 +116,7 @@ const Home = () => {
       description:
         "Produce dynamic videos with your AI avatars from text or audio. Perfect for demos, training content, and customer engagement.",
       gradient: "from-green-500 to-emerald-500",
-      image: "/video-gen.png",
+      image: "/Images/3.jpeg",
     },
     {
       icon: <Settings className="w-10 h-10" />,
@@ -124,7 +124,7 @@ const Home = () => {
       description:
         "Connect MetaPresence to your existing tools. Manage API keys and integrate with CRMs, support platforms, and more.",
       gradient: "from-orange-500 to-yellow-500",
-      image: "/integration.png",
+      image: "/Images/4.jpeg",
     },
   ];
 
@@ -134,7 +134,7 @@ const Home = () => {
       company: "Enterprise Solutions",
       description:
         "Deploy AI-powered sales agents that handle customer inquiries, product demos, and lead qualification 24/7.",
-      image: "/usecase1.png",
+      image: "/Images/5.jpeg",
       icon: <TrendingUp className="w-6 h-6" />,
     },
     {
@@ -142,7 +142,7 @@ const Home = () => {
       company: "Support Automation",
       description:
         "Provide instant, multilingual customer support with AI avatars that understand context and resolve issues efficiently.",
-      image: "/usecase2.png",
+      image: "/Images/6.jpeg",
       icon: <MessageSquare className="w-6 h-6" />,
     },
     {
@@ -150,33 +150,31 @@ const Home = () => {
       company: "L&D Solutions",
       description:
         "Accelerate employee onboarding and training with interactive AI tutors that adapt to individual learning styles.",
-      image: "/usecase3.png",
+      image: "/Images/2.jpeg",
       icon: <Brain className="w-6 h-6" />,
     },
   ];
 
- const avatarShowcase = [
-  { 
-    name: "Real-Time Conversations", 
-    role: "AI-Powered Voice Interactions", 
-    description: "Natural conversations with instant responses",
-    video: "/video1.mp4"
-  },
-  { 
-    name: "Voice Cloning", 
-    role: "Clone Any Voice in Seconds", 
-    description: "Replicate voices with stunning accuracy",
-    video: "/video2.mp4"
-  },
-  { 
-    name: "Enterprise Ready", 
-    role: "Scale Your Operations", 
-    description: "Deploy across teams and platforms",
-    video: "/video3.mp4"
-  }
-]
-
-
+  const avatarShowcase = [
+    {
+      name: "Real-Time Conversations",
+      role: "AI-Powered Voice Interactions",
+      description: "Natural conversations with instant responses",
+      video: "/video1.mp4",
+    },
+    {
+      name: "Voice Cloning",
+      role: "Clone Any Voice in Seconds",
+      description: "Replicate voices with stunning accuracy",
+      video: "/video2.mp4",
+    },
+    {
+      name: "Enterprise Ready",
+      role: "Scale Your Operations",
+      description: "Deploy across teams and platforms",
+      video: "/video3.mp4",
+    },
+  ];
 
   return (
     <div
@@ -187,8 +185,8 @@ const Home = () => {
     >
       <Navbar />
 
-      {/* Hero Section */}
-      <section className="relative min-h-screen flex items-center justify-center overflow-hidden pt-20 px-4">
+      {/* Hero Section - MOBILE RESPONSIVE */}
+      <section className="relative min-h-screen flex items-center justify-center overflow-hidden pt-20 px-4 sm:px-6 lg:px-8">
         <div
           className={`absolute inset-0 ${
             theme === "dark"
@@ -204,15 +202,15 @@ const Home = () => {
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
             transition={{ duration: 0.5 }}
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-purple-600/10 border border-purple-600/20 mb-8"
+            className="inline-flex items-center gap-2 px-3 py-1.5 sm:px-4 sm:py-2 rounded-full bg-purple-600/10 border border-purple-600/20 mb-6 sm:mb-8"
           >
-            <Sparkles className="w-4 h-4 text-purple-600" />
-            <span className="text-sm font-medium text-purple-600">
+            <Sparkles className="w-3 h-3 sm:w-4 sm:h-4 text-purple-600" />
+            <span className="text-xs sm:text-sm font-medium text-purple-600">
               Powered by Advanced AI
             </span>
           </motion.div>
 
-          <h1 className="hero-title text-6xl md:text-7xl lg:text-8xl font-black mb-8 leading-tight">
+          <h1 className="hero-title text-4xl sm:text-5xl md:text-7xl lg:text-8xl font-black mb-6 sm:mb-8 leading-tight px-2">
             <span className="bg-gradient-to-r from-purple-600 via-pink-600 to-blue-600 bg-clip-text text-transparent">
               Be Everywhere.
             </span>
@@ -225,7 +223,7 @@ const Home = () => {
           </h1>
 
           <p
-            className={`hero-subtitle text-xl md:text-2xl lg:text-3xl mb-12 max-w-4xl mx-auto ${
+            className={`hero-subtitle text-base sm:text-xl md:text-2xl lg:text-3xl mb-8 sm:mb-12 max-w-4xl mx-auto px-4 ${
               theme === "dark" ? "text-gray-300" : "text-gray-600"
             }`}
           >
@@ -234,38 +232,38 @@ const Home = () => {
             knowledge and brand voice.
           </p>
 
-          <div className="hero-cta flex flex-col sm:flex-row gap-6 justify-center items-center mb-16">
+          <div className="hero-cta flex flex-col sm:flex-row gap-4 sm:gap-6 justify-center items-center mb-12 sm:mb-16 px-4">
             <motion.a
               href="/auth"
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
-              className="group relative px-10 py-5 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-2xl font-bold text-lg shadow-2xl hover:shadow-purple-500/50 transition-all overflow-hidden"
+              className="w-full sm:w-auto group relative px-8 sm:px-10 py-4 sm:py-5 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-2xl font-bold text-base sm:text-lg shadow-2xl hover:shadow-purple-500/50 transition-all overflow-hidden"
             >
-              <span className="relative z-10 flex items-center gap-3">
+              <span className="relative z-10 flex items-center justify-center gap-3">
                 Get Started Free
-                <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+                <ArrowRight className="w-4 h-4 sm:w-5 sm:h-5 group-hover:translate-x-1 transition-transform" />
               </span>
             </motion.a>
 
             <motion.a
-              href="#video-demo"
+              href="/video-demo"
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
-              className={`px-10 py-5 border-2 rounded-2xl font-bold text-lg flex items-center gap-3 ${
+              className={`w-full sm:w-auto px-8 sm:px-10 py-4 sm:py-5 border-2 rounded-2xl font-bold text-base sm:text-lg flex items-center justify-center gap-3 ${
                 theme === "dark"
                   ? "border-purple-500 text-purple-400 hover:bg-purple-500/10"
                   : "border-purple-600 text-purple-600 hover:bg-purple-50"
               } transition-all`}
             >
-              <Play className="w-6 h-6" />
+              <Play className="w-5 h-5 sm:w-6 sm:h-6" />
               Watch Demo Video
             </motion.a>
           </div>
 
           {/* Trusted By Marquee */}
-          <div className="mt-16">
+          <div className="mt-12 sm:mt-16">
             <p
-              className={`text-sm mb-8 ${
+              className={`text-xs sm:text-sm mb-6 sm:mb-8 ${
                 theme === "dark" ? "text-gray-400" : "text-gray-600"
               }`}
             >
@@ -276,10 +274,10 @@ const Home = () => {
         </div>
       </section>
 
-      {/* Avatar Showcase - Unique Overlapping Grid */}
+      {/* Avatar Showcase - MOBILE RESPONSIVE */}
       <section
         id="avatars"
-        className={`py-32 px-4 ${
+        className={`py-16 sm:py-32 px-4 ${
           theme === "dark" ? "bg-gray-900" : "bg-gray-50"
         }`}
       >
@@ -288,15 +286,15 @@ const Home = () => {
             initial={{ opacity: 0, y: 30 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
-            className="text-center mb-20"
+            className="text-center mb-12 sm:mb-20"
           >
-            <h2 className="text-5xl md:text-6xl font-bold mb-6">
+            <h2 className="text-3xl sm:text-5xl md:text-6xl font-bold mb-4 sm:mb-6 px-4">
               <span className="bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">
                 Your AI Team
               </span>
             </h2>
             <p
-              className={`text-xl ${
+              className={`text-base sm:text-xl px-4 ${
                 theme === "dark" ? "text-gray-400" : "text-gray-600"
               }`}
             >
@@ -308,25 +306,27 @@ const Home = () => {
         </div>
       </section>
 
-      {/* Features Section */}
+      {/* Features Section - MOBILE RESPONSIVE */}
       <section
         id="features"
-        className={`py-32 px-4 ${theme === "dark" ? "bg-black" : "bg-white"}`}
+        className={`py-16 sm:py-32 px-4 ${
+          theme === "dark" ? "bg-black" : "bg-white"
+        }`}
       >
         <div className="max-w-7xl mx-auto">
           <motion.div
             initial={{ opacity: 0, y: 30 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
-            className="text-center mb-20"
+            className="text-center mb-12 sm:mb-20"
           >
-            <h2 className="text-5xl md:text-6xl font-bold mb-6">
+            <h2 className="text-3xl sm:text-5xl md:text-6xl font-bold mb-4 sm:mb-6 px-4">
               <span className="bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">
                 Everything you need
               </span>
             </h2>
             <p
-              className={`text-xl ${
+              className={`text-base sm:text-xl px-4 ${
                 theme === "dark" ? "text-gray-400" : "text-gray-600"
               }`}
             >
@@ -334,30 +334,30 @@ const Home = () => {
             </p>
           </motion.div>
 
-          <div className="space-y-32">
+          <div className="space-y-16 sm:space-y-32">
             {features.map((feature, index) => (
               <div
                 key={index}
                 ref={(el) => (featuresRef.current[index] = el)}
-                className={`grid grid-cols-1 lg:grid-cols-2 gap-12 items-center ${
+                className={`grid grid-cols-1 lg:grid-cols-2 gap-8 sm:gap-12 items-center ${
                   index % 2 === 1 ? "lg:flex-row-reverse" : ""
                 }`}
               >
                 <div className={index % 2 === 1 ? "lg:order-2" : ""}>
                   <div
-                    className={`inline-flex p-4 rounded-2xl bg-gradient-to-br ${feature.gradient} mb-6`}
+                    className={`inline-flex p-3 sm:p-4 rounded-2xl bg-gradient-to-br ${feature.gradient} mb-4 sm:mb-6`}
                   >
                     <div className="text-white">{feature.icon}</div>
                   </div>
                   <h3
-                    className={`text-4xl font-bold mb-6 ${
+                    className={`text-2xl sm:text-3xl md:text-4xl font-bold mb-4 sm:mb-6 ${
                       theme === "dark" ? "text-white" : "text-gray-900"
                     }`}
                   >
                     {feature.title}
                   </h3>
                   <p
-                    className={`text-xl mb-8 ${
+                    className={`text-base sm:text-lg md:text-xl mb-6 sm:mb-8 ${
                       theme === "dark" ? "text-gray-400" : "text-gray-600"
                     }`}
                   >
@@ -366,10 +366,10 @@ const Home = () => {
                   <motion.a
                     href="/auth"
                     whileHover={{ x: 5 }}
-                    className="inline-flex items-center gap-2 text-lg font-semibold text-purple-600 hover:text-purple-700 transition-colors"
+                    className="inline-flex items-center gap-2 text-base sm:text-lg font-semibold text-purple-600 hover:text-purple-700 transition-colors"
                   >
                     Learn More
-                    <ArrowRight className="w-5 h-5" />
+                    <ArrowRight className="w-4 h-4 sm:w-5 sm:h-5" />
                   </motion.a>
                 </div>
                 <div className={index % 2 === 1 ? "lg:order-1" : ""}>
@@ -399,10 +399,10 @@ const Home = () => {
         </div>
       </section>
 
-      {/* Use Cases Section */}
+      {/* Use Cases Section - MOBILE RESPONSIVE */}
       <section
         id="use-cases"
-        className={`py-32 px-4 ${
+        className={`py-16 sm:py-32 px-4 ${
           theme === "dark" ? "bg-gray-900" : "bg-gray-50"
         }`}
       >
@@ -411,9 +411,9 @@ const Home = () => {
             initial={{ opacity: 0, y: 30 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
-            className="text-center mb-20"
+            className="text-center mb-12 sm:mb-20"
           >
-            <h2 className="text-5xl md:text-6xl font-bold mb-6">
+            <h2 className="text-3xl sm:text-5xl md:text-6xl font-bold mb-4 sm:mb-6 px-4">
               <span
                 className={theme === "dark" ? "text-white" : "text-gray-900"}
               >
@@ -421,7 +421,7 @@ const Home = () => {
               </span>
             </h2>
             <p
-              className={`text-xl ${
+              className={`text-base sm:text-xl px-4 ${
                 theme === "dark" ? "text-gray-400" : "text-gray-600"
               }`}
             >
@@ -429,7 +429,7 @@ const Home = () => {
             </p>
           </motion.div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-8">
             {useCases.map((useCase, index) => (
               <motion.div
                 key={index}
@@ -444,7 +444,7 @@ const Home = () => {
                     : "bg-white shadow-xl"
                 }`}
               >
-                <div className="relative h-64">
+                <div className="relative h-48 sm:h-64">
                   <img
                     src={useCase.image}
                     alt={useCase.title}
@@ -455,17 +455,17 @@ const Home = () => {
                       )}`;
                     }}
                   />
-                  <div className="absolute top-4 right-4 px-3 py-1 bg-white/90 backdrop-blur-sm rounded-full text-xs font-semibold text-gray-900">
+                  <div className="absolute top-3 right-3 sm:top-4 sm:right-4 px-2 sm:px-3 py-1 bg-white/90 backdrop-blur-sm rounded-full text-xs font-semibold text-gray-900">
                     {useCase.company}
                   </div>
                 </div>
-                <div className="p-8">
-                  <div className="flex items-center gap-3 mb-4">
-                    <div className="p-2 rounded-lg bg-purple-600/10 text-purple-600">
+                <div className="p-6 sm:p-8">
+                  <div className="flex items-center gap-2 sm:gap-3 mb-3 sm:mb-4">
+                    <div className="p-1.5 sm:p-2 rounded-lg bg-purple-600/10 text-purple-600">
                       {useCase.icon}
                     </div>
                     <h3
-                      className={`text-xl font-bold ${
+                      className={`text-lg sm:text-xl font-bold ${
                         theme === "dark" ? "text-white" : "text-gray-900"
                       }`}
                     >
@@ -473,7 +473,7 @@ const Home = () => {
                     </h3>
                   </div>
                   <p
-                    className={`text-sm ${
+                    className={`text-xs sm:text-sm ${
                       theme === "dark" ? "text-gray-400" : "text-gray-600"
                     }`}
                   >
@@ -495,9 +495,9 @@ const Home = () => {
       {/* Pricing Section */}
       <PricingSection />
 
-      {/* CTA Section */}
+      {/* CTA Section - MOBILE RESPONSIVE */}
       <section
-        className={`py-32 px-4 ${
+        className={`py-16 sm:py-32 px-4 ${
           theme === "dark"
             ? "bg-gradient-to-br from-purple-900/20 to-pink-900/20"
             : "bg-gradient-to-br from-purple-50 to-pink-50"
@@ -509,13 +509,13 @@ const Home = () => {
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
           >
-            <h2 className="text-5xl md:text-6xl font-bold mb-8">
+            <h2 className="text-3xl sm:text-5xl md:text-6xl font-bold mb-6 sm:mb-8 px-4">
               <span className="bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">
                 Ready to transform your presence?
               </span>
             </h2>
             <p
-              className={`text-xl mb-12 ${
+              className={`text-base sm:text-xl mb-8 sm:mb-12 px-4 ${
                 theme === "dark" ? "text-gray-300" : "text-gray-600"
               }`}
             >
@@ -526,10 +526,10 @@ const Home = () => {
               href="/auth"
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
-              className="inline-flex items-center gap-3 px-12 py-6 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-2xl font-bold text-xl shadow-2xl hover:shadow-purple-500/50 transition-all"
+              className="inline-flex items-center gap-3 px-8 sm:px-12 py-4 sm:py-6 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-2xl font-bold text-base sm:text-xl shadow-2xl hover:shadow-purple-500/50 transition-all"
             >
               Start Building Now
-              <ArrowRight className="w-6 h-6" />
+              <ArrowRight className="w-5 h-5 sm:w-6 sm:h-6" />
             </motion.a>
           </motion.div>
         </div>
@@ -541,7 +541,7 @@ const Home = () => {
   );
 };
 
-// Company Marquee Component
+// Company Marquee Component - MOBILE RESPONSIVE
 const CompanyMarquee = ({ theme }) => {
   const companies = [
     { name: "AWS", logo: "/aws.png" },
@@ -555,17 +555,17 @@ const CompanyMarquee = ({ theme }) => {
   ];
 
   return (
-    <div className="relative w-full overflow-hidden py-12">
-      {/* Gradient overlays for smooth fade effect */}
+    <div className="relative w-full overflow-hidden py-8 sm:py-12">
+      {/* Gradient overlays */}
       <div
-        className={`absolute left-0 top-0 bottom-0 w-40 z-10 ${
+        className={`absolute left-0 top-0 bottom-0 w-20 sm:w-40 z-10 ${
           theme === "dark"
             ? "bg-gradient-to-r from-gray-950 to-transparent"
             : "bg-gradient-to-r from-white to-transparent"
         }`}
       ></div>
       <div
-        className={`absolute right-0 top-0 bottom-0 w-40 z-10 ${
+        className={`absolute right-0 top-0 bottom-0 w-20 sm:w-40 z-10 ${
           theme === "dark"
             ? "bg-gradient-to-l from-gray-950 to-transparent"
             : "bg-gradient-to-l from-white to-transparent"
@@ -574,23 +574,22 @@ const CompanyMarquee = ({ theme }) => {
 
       {/* Marquee container */}
       <div className="flex animate-marquee">
-        {/* Duplicate the array 3 times for seamless loop */}
         {[...companies, ...companies, ...companies].map((company, index) => (
           <div
             key={`${company.name}-${index}`}
-            className="flex items-center justify-center mx-10 flex-shrink-0"
+            className="flex items-center justify-center mx-6 sm:mx-10 flex-shrink-0"
           >
             <img
               src={company.logo}
               alt={company.name}
-              className={`h-20 w-auto object-contain transition-all duration-300 ${
+              className={`h-12 sm:h-20 w-auto object-contain transition-all duration-300 ${
                 theme === "dark"
                   ? "opacity-80 hover:opacity-100 brightness-90 hover:brightness-110"
                   : "opacity-70 hover:opacity-100 brightness-95 hover:brightness-100"
               }`}
               style={{
-                maxWidth: "180px",
-                minWidth: "150px",
+                maxWidth: "120px",
+                minWidth: "80px",
                 filter: theme === "dark" ? "invert(0.9)" : "none",
               }}
               onError={(e) => {
@@ -605,8 +604,7 @@ const CompanyMarquee = ({ theme }) => {
   );
 };
 
-
-// Overlapping Avatar Grid Component
+// Overlapping Avatar Grid Component - MOBILE RESPONSIVE
 const OverlappingAvatarGrid = ({ avatars, theme }) => {
   const [hoveredIndex, setHoveredIndex] = useState(null);
   const videoRefs = useRef([]);
@@ -627,43 +625,132 @@ const OverlappingAvatarGrid = ({ avatars, theme }) => {
   };
 
   return (
-    <div className="relative h-[700px] max-w-7xl mx-auto">
-      {avatars.map((avatar, index) => {
-        const positions = [
-          { left: "3%", top: "45%", rotate: "-3deg" },
-          { left: "33%", top: "25%", rotate: "2deg" },
-          { left: "63%", top: "5%", rotate: "-2deg" },
-        ];
+    <>
+      {/* Desktop version - overlapping */}
+      <div className="hidden lg:block relative h-[700px] max-w-7xl mx-auto">
+        {avatars.map((avatar, index) => {
+          const positions = [
+            { left: "3%", top: "45%", rotate: "-3deg" },
+            { left: "33%", top: "25%", rotate: "2deg" },
+            { left: "63%", top: "5%", rotate: "-2deg" },
+          ];
 
-        return (
+          return (
+            <motion.div
+              key={index}
+              initial={{ opacity: 0, scale: 0.8 }}
+              whileInView={{ opacity: 1, scale: 1 }}
+              viewport={{ once: true }}
+              transition={{ delay: index * 0.2 }}
+              onMouseEnter={() => handleMouseEnter(index)}
+              onMouseLeave={() => handleMouseLeave(index)}
+              className="absolute w-[450px] cursor-pointer"
+              style={{
+                left: positions[index].left,
+                top: positions[index].top,
+                zIndex: hoveredIndex === index ? 50 : 10 - index,
+                transform:
+                  hoveredIndex === index
+                    ? "scale(1.12) rotate(0deg)"
+                    : `rotate(${positions[index].rotate})`,
+                transition: "all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1)",
+              }}
+            >
+              <div
+                className={`relative rounded-2xl overflow-hidden shadow-2xl ${
+                  theme === "dark"
+                    ? "bg-gray-800 border-2 border-gray-700"
+                    : "bg-white border-2 border-gray-200"
+                } ${
+                  hoveredIndex === index
+                    ? "shadow-purple-500/50 ring-2 ring-purple-500"
+                    : ""
+                }`}
+              >
+                <div className="relative aspect-[16/10] bg-gray-900">
+                  <video
+                    ref={(el) => (videoRefs.current[index] = el)}
+                    src={avatar.video}
+                    loop
+                    muted
+                    playsInline
+                    className="w-full h-full object-cover"
+                    onError={(e) => {
+                      console.error(`Failed to load video: ${avatar.video}`);
+                      e.target.src = `https://via.placeholder.com/450x281/a855f7/ffffff?text=${encodeURIComponent(
+                        avatar.name
+                      )}`;
+                    }}
+                  />
+
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent pointer-events-none">
+                    <div className="absolute bottom-0 left-0 right-0 p-5">
+                      <div className="space-y-1">
+                        <h3 className="text-white font-bold text-lg tracking-tight drop-shadow-lg">
+                          {avatar.name}
+                        </h3>
+                        <p className="text-white/70 text-xs font-medium drop-shadow-md">
+                          {avatar.role}
+                        </p>
+                        {avatar.description && (
+                          <p className="text-white/60 text-xs leading-relaxed drop-shadow-md">
+                            {avatar.description}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {hoveredIndex !== index && (
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <motion.div
+                        whileHover={{ scale: 1.1 }}
+                        className="w-20 h-20 rounded-full bg-purple-600/40 backdrop-blur-sm flex items-center justify-center shadow-xl border-2 border-white/30"
+                      >
+                        <Play
+                          className="w-9 h-9 text-white ml-1"
+                          fill="white"
+                          fillOpacity="0.9"
+                        />
+                      </motion.div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </motion.div>
+          );
+        })}
+      </div>
+
+      {/* Mobile/Tablet version - stacked grid */}
+      <div className="lg:hidden grid grid-cols-1 md:grid-cols-2 gap-6">
+        {avatars.map((avatar, index) => (
           <motion.div
             key={index}
-            initial={{ opacity: 0, scale: 0.8 }}
-            whileInView={{ opacity: 1, scale: 1 }}
+            initial={{ opacity: 0, y: 50 }}
+            whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
-            transition={{ delay: index * 0.2 }}
-            onMouseEnter={() => handleMouseEnter(index)}
-            onMouseLeave={() => handleMouseLeave(index)}
-            className="absolute w-[450px] cursor-pointer"
-            style={{
-              left: positions[index].left,
-              top: positions[index].top,
-              zIndex: hoveredIndex === index ? 50 : 10 - index,
-              transform:
-                hoveredIndex === index
-                  ? "scale(1.12) rotate(0deg)"
-                  : `rotate(${positions[index].rotate})`,
-              transition: "all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1)",
+            transition={{ delay: index * 0.15 }}
+            onClick={() => {
+              if (hoveredIndex === index) {
+                handleMouseLeave(index);
+              } else {
+                handleMouseEnter(index);
+              }
             }}
+            className="cursor-pointer"
           >
             <div
               className={`relative rounded-2xl overflow-hidden shadow-2xl ${
                 theme === "dark"
                   ? "bg-gray-800 border-2 border-gray-700"
                   : "bg-white border-2 border-gray-200"
-              } ${hoveredIndex === index ? "shadow-purple-500/50 ring-2 ring-purple-500" : ""}`}
+              } ${
+                hoveredIndex === index
+                  ? "shadow-purple-500/50 ring-2 ring-purple-500"
+                  : ""
+              }`}
             >
-              {/* Horizontal aspect ratio container */}
               <div className="relative aspect-[16/10] bg-gray-900">
                 <video
                   ref={(el) => (videoRefs.current[index] = el)}
@@ -673,51 +760,41 @@ const OverlappingAvatarGrid = ({ avatars, theme }) => {
                   playsInline
                   className="w-full h-full object-cover"
                   onError={(e) => {
-                    console.error(`Failed to load video: ${avatar.video}`)
-                    e.target.src = `https://via.placeholder.com/450x281/a855f7/ffffff?text=${encodeURIComponent(
-                      avatar.name
-                    )}`;
+                    console.error(`Failed to load video: ${avatar.video}`);
                   }}
                 />
-                
-                {/* Gradient overlay with text */}
+
                 <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent pointer-events-none">
-                  <div className="absolute bottom-0 left-0 right-0 p-5">
+                  <div className="absolute bottom-0 left-0 right-0 p-4">
                     <div className="space-y-1">
-                      <h3 className="text-white font-bold text-lg tracking-tight drop-shadow-lg">
+                      <h3 className="text-white font-bold text-base tracking-tight drop-shadow-lg">
                         {avatar.name}
                       </h3>
                       <p className="text-white/70 text-xs font-medium drop-shadow-md">
                         {avatar.role}
                       </p>
-                      {avatar.description && (
-                        <p className="text-white/60 text-xs leading-relaxed drop-shadow-md">
-                          {avatar.description}
-                        </p>
-                      )}
                     </div>
                   </div>
                 </div>
 
-                {/* Play button overlay (only when not hovering) */}
                 {hoveredIndex !== index && (
                   <div className="absolute inset-0 flex items-center justify-center">
-                    <motion.div
-                      whileHover={{ scale: 1.1 }}
-                      className="w-30 h-30 rounded-full bg-purple-600/40 backdrop-blur-sm flex items-center justify-center shadow-xl border-2 border-white/30"
-                    >
-                      <Play className="w-9 h-9 text-white ml-1" fill="white" fillOpacity="0.9" />
-                    </motion.div>
+                    <div className="w-16 h-16 rounded-full bg-purple-600/40 backdrop-blur-sm flex items-center justify-center shadow-xl border-2 border-white/30">
+                      <Play
+                        className="w-8 h-8 text-white ml-1"
+                        fill="white"
+                        fillOpacity="0.9"
+                      />
+                    </div>
                   </div>
                 )}
               </div>
             </div>
           </motion.div>
-        );
-      })}
-    </div>
+        ))}
+      </div>
+    </>
   );
 };
-
 
 export default Home;

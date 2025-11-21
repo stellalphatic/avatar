@@ -38,6 +38,7 @@ import AcceptableUsePolicyPage from "./pages/AcceptableUsePolicyPage";
 // const VideoGenerationPage = () => <div className="p-8 text-center text-xl dark:text-gray-200">Video Generation Coming Soon!</div>;
 const PublicGallery = () => <div className="p-8 text-center text-xl dark:text-gray-200">Public Gallery Coming Soon!</div>;
 
+import VideoDemoPage from "./components/VideoDemoPage";
 
 function App() {
   return (
@@ -69,6 +70,8 @@ function App() {
                 path="/acceptable-use"
                 element={<AcceptableUsePolicyPage />}
               />
+              <Route path="/video-demo" element={<VideoDemoPage />} />
+              
               {/* Protected Dashboard Route with Nested Routes */}
               <Route
                 path="/dashboard"
