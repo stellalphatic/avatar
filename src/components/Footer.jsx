@@ -46,21 +46,21 @@ const Footer = () => {
   };
 
   const socialLinks = [
-    {
-      icon: <Twitter className="w-5 h-5" />,
-      href: "https://twitter.com/metapresence",
-      name: "Twitter",
-    },
+    // {
+    //   icon: <Twitter className="w-5 h-5" />,
+    //   href: "https://twitter.com/metapresence",
+    //   name: "Twitter",
+    // },
     {
       icon: <Linkedin className="w-5 h-5" />,
       href: "https://linkedin.com/company/metapresence",
       name: "LinkedIn",
     },
-    {
-      icon: <Github className="w-5 h-5" />,
-      href: "https://github.com/metapresence",
-      name: "GitHub",
-    },
+    // {
+    //   icon: <Github className="w-5 h-5" />,
+    //   href: "https://github.com/metapresence",
+    //   name: "GitHub",
+    // },
     {
       icon: <Mail className="w-5 h-5" />,
       href: "mailto:contact@metapresence.my",
@@ -123,7 +123,7 @@ const Footer = () => {
                   } text-sm`}
                 >
                   <Phone className="w-4 h-4" />
-                  <span>+92 (300) 123-4567</span>
+                  <span>+92 (325) 882-1216</span>
                 </div>
                 <div
                   className={`flex items-center gap-3 ${
