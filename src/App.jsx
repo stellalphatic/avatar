@@ -12,7 +12,7 @@ import ProtectedRoute from './ProtectedRoute';
 // Dashboard Pages
 import DashboardOverview from './dashboard_pages/DashboardOverview';
 import MyCreations from './dashboard_pages/MyCreations';
-// import PublicGallery from './dashboard_pages/PublicGallery';
+import PublicGallery from './dashboard_pages/PublicGallery';
 import CreateAvatar from './dashboard_pages/CreateAvatar';
 import SettingsPage from './dashboard_pages/SettingsPage'; 
 import VoicesPage from './dashboard_pages/VoicesPage';
@@ -36,7 +36,7 @@ import AcceptableUsePolicyPage from "./pages/AcceptableUsePolicyPage";
 // Placeholder components for routes not yet fully implemented
 // const ConversationLibraryPage = () => <div className="p-8 text-center text-xl dark:text-gray-200">Conversation Library Coming Soon!</div>;
 // const VideoGenerationPage = () => <div className="p-8 text-center text-xl dark:text-gray-200">Video Generation Coming Soon!</div>;
-const PublicGallery = () => <div className="p-8 text-center text-xl dark:text-gray-200">Public Gallery Coming Soon!</div>;
+// const PublicGallery = () => <div className="p-8 text-center text-xl dark:text-gray-200">Public Gallery Coming Soon!</div>;
 
 import VideoDemoPage from "./components/VideoDemoPage";
 

@@ -1,15 +1,44 @@
-"use client"
+"use client";
 
-import { useState, useEffect } from "react"
-import { useAuth } from "../contexts/AuthContext"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../components/ui/card"
-import { Badge } from "../components/ui/badge"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "../components/ui/tabs"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select"
-import { BarChart3, TrendingUp, AlertCircle, Activity, Zap } from "lucide-react"
+import { useState, useEffect } from "react";
+import { useAuth } from "../contexts/AuthContext";
+import { useTheme } from "../contexts/ThemeContext";
+import supabase from "../supabaseClient";
 import {
-  LineChart,
-  Line,
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "../components/ui/card";
+import { Badge } from "../components/ui/badge";
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from "../components/ui/tabs";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "../components/ui/select";
+import {
+  BarChart3,
+  TrendingUp,
+  Activity,
+  Zap,
+  Clock,
+  CheckCircle2,
+  XCircle,
+  Loader2,
+  Calendar,
+  Users,
+  MessageSquare,
+} from "lucide-react";
+import {
   XAxis,
   YAxis,
   CartesianGrid,
@@ -22,555 +51,701 @@ import {
   Cell,
   AreaChart,
   Area,
-} from "recharts"
+} from "recharts";
+
+const COLORS = {
+  voice: "#10b981",
+  video: "#3b82f6",
+  audio: "#f59e0b",
+  avatar: "#ef4444",
+  success: "#10b981",
+  error: "#ef4444",
+};
 
 const APIAnalytics = () => {
-  const { user, supabase } = useAuth()
-  const [loading, setLoading] = useState(true)
-  const [timeRange, setTimeRange] = useState("7d")
-  const [selectedApiKey, setSelectedApiKey] = useState("all")
+  const { user } = useAuth();
+  const { theme } = useTheme();
+  const [loading, setLoading] = useState(true);
+  const [timeRange, setTimeRange] = useState("7d");
+  const [selectedApiKey, setSelectedApiKey] = useState("all");
+  const [apiKeys, setApiKeys] = useState([]);
   const [analyticsData, setAnalyticsData] = useState({
-    overview: {},
-    usage: [],
-    performance: [],
-    errors: [],
-    apiKeys: [],
-    realTime: {},
-  })
+    overview: {
+      totalConversations: 0,
+      totalVoiceMinutes: 0,
+      totalVideoMinutes: 0,
+      averageDuration: 0,
+    },
+    conversationTrend: [],
+    usageByType: [],
+    recentConversations: [],
+    apiKeyUsage: [],
+  });
 
   useEffect(() => {
     if (user) {
-      fetchAnalyticsData()
-      // Set up real-time updates every 30 seconds
-      const interval = setInterval(fetchRealTimeData, 30000)
-      return () => clearInterval(interval)
+      fetchAnalyticsData();
+      // Auto-refresh every 60 seconds
+      const interval = setInterval(fetchAnalyticsData, 60000);
+      return () => clearInterval(interval);
     }
-  }, [user, timeRange, selectedApiKey])
+  }, [user, timeRange, selectedApiKey]);
 
   const fetchAnalyticsData = async () => {
     try {
-      setLoading(true)
-      await Promise.all([
-        fetchOverviewData(),
-        fetchUsageData(),
-        fetchPerformanceData(),
-        fetchErrorData(),
-        fetchApiKeysData(),
-        fetchRealTimeData(),
-      ])
+      setLoading(true);
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      if (!session) return;
+
+      // Fetch API keys for filtering
+      const keysRes = await fetch(
+        `${import.meta.env.VITE_BACKEND_API_URL}/api/keys`,
+        {
+          headers: { Authorization: `Bearer ${session.access_token}` },
+        }
+      );
+
+      if (keysRes.ok) {
+        const keysData = await keysRes.json();
+        setApiKeys(keysData.data || []);
+      }
+
+      // Fetch conversations with filters
+      const startDate = getStartDate(timeRange);
+      let conversationsQuery = supabase
+        .from("conversations")
+        .select("*, avatars(name), api_keys(name)")
+        .eq("user_id", user.id)
+        .gte("created_at", startDate)
+        .order("created_at", { ascending: false });
+
+      if (selectedApiKey !== "all") {
+        conversationsQuery = conversationsQuery.eq(
+          "api_key_id",
+          selectedApiKey
+        );
+      }
+
+      const { data: conversations, error } = await conversationsQuery;
+
+      if (!error && conversations) {
+        processAnalyticsData(conversations);
+      }
+
+      // Fetch API key usage stats
+      if (selectedApiKey === "all") {
+        const { data: keyUsage } = await supabase
+          .from("api_key_usage")
+          .select("*, api_keys(name)")
+          .eq("user_id", user.id)
+          .gte("created_at", startDate);
+
+        if (keyUsage) {
+          processApiKeyUsage(keyUsage);
+        }
+      }
     } catch (error) {
-      console.error("Error fetching analytics:", error)
+      console.error("Error fetching analytics:", error);
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
-  const fetchOverviewData = async () => {
-    const { data, error } = await supabase
-      .from("api_usage")
-      .select("endpoint_type, usage_amount, success, created_at")
-      .eq("user_id", user.id)
-      .gte("created_at", getDateRange(timeRange))
-
-    if (!error && data) {
-      const overview = {
-        totalRequests: data.length,
-        successfulRequests: data.filter((r) => r.success).length,
-        totalUsage: data.reduce((sum, r) => sum + Number.parseFloat(r.usage_amount || 0), 0),
-        successRate: data.length > 0 ? (data.filter((r) => r.success).length / data.length) * 100 : 0,
-      }
-      setAnalyticsData((prev) => ({ ...prev, overview }))
-    }
-  }
-
-  const fetchUsageData = async () => {
-    const { data, error } = await supabase
-      .from("api_usage")
-      .select(`
-        endpoint_type,
-        usage_amount,
-        created_at,
-        api_keys!inner(name)
-      `)
-      .eq("user_id", user.id)
-      .gte("created_at", getDateRange(timeRange))
-      .order("created_at", { ascending: true })
-
-    if (!error && data) {
-      const processedData = processUsageByTime(data)
-      setAnalyticsData((prev) => ({ ...prev, usage: processedData }))
-    }
-  }
-
-  const fetchPerformanceData = async () => {
-    const { data, error } = await supabase
-      .from("api_request_logs")
-      .select("endpoint, response_time_ms, response_status, created_at")
-      .eq("user_id", user.id)
-      .gte("created_at", getDateRange(timeRange))
-      .order("created_at", { ascending: true })
-
-    if (!error && data) {
-      const processedData = processPerformanceData(data)
-      setAnalyticsData((prev) => ({ ...prev, performance: processedData }))
-    }
-  }
-
-  const fetchErrorData = async () => {
-    const { data, error } = await supabase
-      .from("api_request_logs")
-      .select("endpoint, response_status, error_message, created_at")
-      .eq("user_id", user.id)
-      .gte("response_status", 400)
-      .gte("created_at", getDateRange(timeRange))
-      .order("created_at", { ascending: false })
-      .limit(50)
-
-    if (!error && data) {
-      setAnalyticsData((prev) => ({ ...prev, errors: data }))
-    }
-  }
-
-  const fetchApiKeysData = async () => {
-    const { data, error } = await supabase
-      .from("api_keys")
-      .select(`
-        id,
-        name,
-        created_at,
-        last_used_at,
-        is_active,
-        api_usage!inner(endpoint_type, usage_amount, success, created_at)
-      `)
-      .eq("user_id", user.id)
-      .eq("is_active", true)
-
-    if (!error && data) {
-      const processedKeys = data.map((key) => ({
-        ...key,
-        totalRequests: key.api_usage.length,
-        successRate:
-          key.api_usage.length > 0 ? (key.api_usage.filter((u) => u.success).length / key.api_usage.length) * 100 : 0,
-        totalUsage: key.api_usage.reduce((sum, u) => sum + Number.parseFloat(u.usage_amount || 0), 0),
-      }))
-      setAnalyticsData((prev) => ({ ...prev, apiKeys: processedKeys }))
-    }
-  }
-
-  const fetchRealTimeData = async () => {
-    const now = new Date()
-    const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000)
-
-    const { data, error } = await supabase
-      .from("api_usage")
-      .select("endpoint_type, success, created_at")
-      .eq("user_id", user.id)
-      .gte("created_at", oneHourAgo.toISOString())
-
-    if (!error && data) {
-      const realTime = {
-        requestsLastHour: data.length,
-        successRateLastHour: data.length > 0 ? (data.filter((r) => r.success).length / data.length) * 100 : 0,
-        activeEndpoints: [...new Set(data.map((r) => r.endpoint_type))].length,
-      }
-      setAnalyticsData((prev) => ({ ...prev, realTime }))
-    }
-  }
-
-  const getDateRange = (range) => {
-    const now = new Date()
+  const getStartDate = (range) => {
+    const now = new Date();
     switch (range) {
-      case "1d":
-        return new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString()
+      case "24h":
+        return new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString();
       case "7d":
-        return new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString()
+        return new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
       case "30d":
-        return new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString()
+        return new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString();
       case "90d":
-        return new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000).toISOString()
+        return new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000).toISOString();
       default:
-        return new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString()
+        return new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
     }
-  }
+  };
 
-  const processUsageByTime = (data) => {
-    const grouped = {}
-    data.forEach((record) => {
-      const date = new Date(record.created_at).toLocaleDateString()
-      if (!grouped[date]) {
-        grouped[date] = { date, audio: 0, video: 0, avatar: 0, total: 0 }
+  const processAnalyticsData = (conversations) => {
+    // Overview stats
+    const totalConversations = conversations.length;
+    const voiceConvs = conversations.filter(
+      (c) => c.conversation_type === "voice"
+    );
+    const videoConvs = conversations.filter(
+      (c) => c.conversation_type === "video"
+    );
+
+    const totalVoiceMinutes = voiceConvs.reduce(
+      (sum, c) => sum + (c.duration_minutes || 0),
+      0
+    );
+    const totalVideoMinutes = videoConvs.reduce(
+      (sum, c) => sum + (c.duration_minutes || 0),
+      0
+    );
+
+    const totalMinutes = totalVoiceMinutes + totalVideoMinutes;
+    const averageDuration =
+      totalConversations > 0 ? totalMinutes / totalConversations : 0;
+
+    // Conversation trend by day
+    const trendMap = {};
+    conversations.forEach((conv) => {
+      const date = new Date(conv.created_at).toLocaleDateString();
+      if (!trendMap[date]) {
+        trendMap[date] = {
+          date,
+          voice: 0,
+          video: 0,
+          total: 0,
+        };
       }
-      const amount = Number.parseFloat(record.usage_amount) || 0
-      const type = record.endpoint_type.split("_")[0]
-      grouped[date][type] += amount
-      grouped[date].total += amount
-    })
-    return Object.values(grouped).sort((a, b) => new Date(a.date) - new Date(b.date))
-  }
+      trendMap[date][conv.conversation_type] += 1;
+      trendMap[date].total += 1;
+    });
 
-  const processPerformanceData = (data) => {
-    const grouped = {}
-    data.forEach((record) => {
-      const hour = new Date(record.created_at).toISOString().slice(0, 13) + ":00:00.000Z"
-      if (!grouped[hour]) {
-        grouped[hour] = { time: hour, avgResponseTime: 0, requests: 0, errors: 0 }
+    const conversationTrend = Object.values(trendMap).sort(
+      (a, b) => new Date(a.date) - new Date(b.date)
+    );
+
+    // Usage by type (for pie chart)
+    const usageByType = [
+      {
+        name: "Voice",
+        value: voiceConvs.length,
+        minutes: totalVoiceMinutes,
+        color: COLORS.voice,
+      },
+      {
+        name: "Video",
+        value: videoConvs.length,
+        minutes: totalVideoMinutes,
+        color: COLORS.video,
+      },
+    ];
+
+    // Recent conversations (top 10)
+    const recentConversations = conversations.slice(0, 10);
+
+    setAnalyticsData({
+      overview: {
+        totalConversations,
+        totalVoiceMinutes,
+        totalVideoMinutes,
+        averageDuration,
+      },
+      conversationTrend,
+      usageByType,
+      recentConversations,
+    });
+  };
+
+  const processApiKeyUsage = (keyUsage) => {
+    const keyMap = {};
+    keyUsage.forEach((usage) => {
+      const keyName = usage.api_keys?.name || "Unknown";
+      if (!keyMap[keyName]) {
+        keyMap[keyName] = {
+          name: keyName,
+          calls: 0,
+          minutes: 0,
+        };
       }
-      grouped[hour].requests += 1
-      grouped[hour].avgResponseTime += record.response_time_ms || 0
-      if (record.response_status >= 400) {
-        grouped[hour].errors += 1
-      }
-    })
+      keyMap[keyName].calls += usage.api_calls || 0;
+      keyMap[keyName].minutes += usage.duration_minutes || 0;
+    });
 
-    return Object.values(grouped)
-      .map((group) => ({
-        ...group,
-        avgResponseTime: group.requests > 0 ? group.avgResponseTime / group.requests : 0,
-        errorRate: group.requests > 0 ? (group.errors / group.requests) * 100 : 0,
-      }))
-      .sort((a, b) => new Date(a.time) - new Date(b.time))
-  }
+    const apiKeyUsage = Object.values(keyMap);
+    setAnalyticsData((prev) => ({ ...prev, apiKeyUsage }));
+  };
 
-  const COLORS = ["#10b981", "#3b82f6", "#f59e0b", "#ef4444", "#8b5cf6"]
+  const formatDuration = (minutes) => {
+    if (minutes < 1) return `${Math.round(minutes * 60)}s`;
+    if (minutes < 60) return `${minutes.toFixed(1)}m`;
+    const hours = Math.floor(minutes / 60);
+    const mins = Math.round(minutes % 60);
+    return `${hours}h ${mins}m`;
+  };
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-emerald-500"></div>
+      <div className="flex items-center justify-center h-screen">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
       </div>
-    )
+    );
   }
 
   return (
-    <div className="container mx-auto p-6 space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">API Analytics</h1>
-          <p className="text-gray-600 dark:text-gray-400 mt-2">
-            Comprehensive analytics and insights for your API usage
-          </p>
-        </div>
-        <div className="flex items-center gap-4">
-          <Select value={timeRange} onValueChange={setTimeRange}>
-            <SelectTrigger className="w-32">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="1d">Last 24h</SelectItem>
-              <SelectItem value="7d">Last 7 days</SelectItem>
-              <SelectItem value="30d">Last 30 days</SelectItem>
-              <SelectItem value="90d">Last 90 days</SelectItem>
-            </SelectContent>
-          </Select>
-          <Select value={selectedApiKey} onValueChange={setSelectedApiKey}>
-            <SelectTrigger className="w-48">
-              <SelectValue placeholder="All API Keys" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All API Keys</SelectItem>
-              {analyticsData.apiKeys.map((key) => (
-                <SelectItem key={key.id} value={key.id}>
-                  {key.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+    <div className="container mx-auto px-4 py-8 max-w-7xl">
+      {/* Header */}
+      <div className="mb-8">
+        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 mb-4">
+          <div>
+            <h1 className="text-3xl font-bold mb-2">Analytics & Insights</h1>
+            <p className="text-muted-foreground">
+              Monitor your API usage, track conversations, and analyze
+              performance
+            </p>
+          </div>
+          <div className="flex gap-2">
+            <Select value={timeRange} onValueChange={setTimeRange}>
+              <SelectTrigger className="w-[140px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="24h">Last 24 hours</SelectItem>
+                <SelectItem value="7d">Last 7 days</SelectItem>
+                <SelectItem value="30d">Last 30 days</SelectItem>
+                <SelectItem value="90d">Last 90 days</SelectItem>
+              </SelectContent>
+            </Select>
+
+            <Select value={selectedApiKey} onValueChange={setSelectedApiKey}>
+              <SelectTrigger className="w-[180px]">
+                <SelectValue placeholder="All API Keys" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All API Keys</SelectItem>
+                {apiKeys.map((key) => (
+                  <SelectItem key={key.id} value={key.id}>
+                    {key.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
         </div>
       </div>
 
-      {/* Real-time Overview Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+      {/* Overview Stats */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
         <Card>
-          <CardContent className="p-6">
+          <CardContent className="pt-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-muted-foreground">Total Requests</p>
-                <p className="text-2xl font-bold">{analyticsData.overview.totalRequests?.toLocaleString() || 0}</p>
+                <p className="text-sm font-medium text-muted-foreground">
+                  Total Conversations
+                </p>
+                <p className="text-2xl font-bold">
+                  {analyticsData.overview.totalConversations}
+                </p>
               </div>
-              <Activity className="h-8 w-8 text-emerald-600" />
-            </div>
-            <div className="flex items-center mt-2">
-              <Badge variant="secondary" className="text-xs">
-                {analyticsData.realTime.requestsLastHour || 0} last hour
-              </Badge>
+              <MessageSquare className="w-8 h-8 text-muted-foreground" />
             </div>
           </CardContent>
         </Card>
 
         <Card>
-          <CardContent className="p-6">
+          <CardContent className="pt-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-muted-foreground">Success Rate</p>
-                <p className="text-2xl font-bold">{analyticsData.overview.successRate?.toFixed(1) || 0}%</p>
+                <p className="text-sm font-medium text-muted-foreground">
+                  Voice Minutes
+                </p>
+                <p className="text-2xl font-bold">
+                  {analyticsData.overview.totalVoiceMinutes.toFixed(1)}
+                </p>
               </div>
-              <TrendingUp className="h-8 w-8 text-green-600" />
-            </div>
-            <div className="flex items-center mt-2">
-              <Badge variant="secondary" className="text-xs">
-                {analyticsData.realTime.successRateLastHour?.toFixed(1) || 0}% last hour
-              </Badge>
+              <Zap className="w-8 h-8 text-green-500" />
             </div>
           </CardContent>
         </Card>
 
         <Card>
-          <CardContent className="p-6">
+          <CardContent className="pt-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-muted-foreground">Total Usage</p>
-                <p className="text-2xl font-bold">{analyticsData.overview.totalUsage?.toFixed(1) || 0}</p>
+                <p className="text-sm font-medium text-muted-foreground">
+                  Video Minutes
+                </p>
+                <p className="text-2xl font-bold">
+                  {analyticsData.overview.totalVideoMinutes.toFixed(1)}
+                </p>
               </div>
-              <BarChart3 className="h-8 w-8 text-blue-600" />
-            </div>
-            <div className="flex items-center mt-2">
-              <Badge variant="secondary" className="text-xs">
-                minutes
-              </Badge>
+              <Activity className="w-8 h-8 text-blue-500" />
             </div>
           </CardContent>
         </Card>
 
         <Card>
-          <CardContent className="p-6">
+          <CardContent className="pt-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-muted-foreground">Active Endpoints</p>
-                <p className="text-2xl font-bold">{analyticsData.realTime.activeEndpoints || 0}</p>
+                <p className="text-sm font-medium text-muted-foreground">
+                  Avg Duration
+                </p>
+                <p className="text-2xl font-bold">
+                  {formatDuration(analyticsData.overview.averageDuration)}
+                </p>
               </div>
-              <Zap className="h-8 w-8 text-amber-600" />
-            </div>
-            <div className="flex items-center mt-2">
-              <Badge variant="secondary" className="text-xs">
-                last hour
-              </Badge>
+              <Clock className="w-8 h-8 text-orange-500" />
             </div>
           </CardContent>
         </Card>
       </div>
 
-      <Tabs defaultValue="usage" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-4">
-          <TabsTrigger value="usage">Usage Trends</TabsTrigger>
-          <TabsTrigger value="performance">Performance</TabsTrigger>
-          <TabsTrigger value="errors">Error Analysis</TabsTrigger>
-          <TabsTrigger value="keys">API Keys</TabsTrigger>
+      <Tabs defaultValue="overview" className="space-y-6">
+        <TabsList>
+          <TabsTrigger value="overview">Overview</TabsTrigger>
+          <TabsTrigger value="usage">Usage Details</TabsTrigger>
+          <TabsTrigger value="conversations">Recent Activity</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="usage" className="space-y-6">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>Usage Over Time</CardTitle>
-                <CardDescription>API usage across all endpoints</CardDescription>
-              </CardHeader>
-              <CardContent>
+        {/* Overview Tab */}
+        <TabsContent value="overview" className="space-y-6">
+          {/* Conversation Trend */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Conversation Trend</CardTitle>
+              <CardDescription>
+                Daily conversation volume over the selected period
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {analyticsData.conversationTrend.length === 0 ? (
+                <div className="text-center py-12 text-muted-foreground">
+                  <BarChart3 className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                  <p>No conversation data available for this period</p>
+                </div>
+              ) : (
                 <ResponsiveContainer width="100%" height={300}>
-                  <AreaChart data={analyticsData.usage}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="date" />
-                    <YAxis />
-                    <Tooltip />
+                  <AreaChart data={analyticsData.conversationTrend}>
+                    <defs>
+                      <linearGradient
+                        id="voiceGradient"
+                        x1="0"
+                        y1="0"
+                        x2="0"
+                        y2="1"
+                      >
+                        <stop
+                          offset="5%"
+                          stopColor={COLORS.voice}
+                          stopOpacity={0.8}
+                        />
+                        <stop
+                          offset="95%"
+                          stopColor={COLORS.voice}
+                          stopOpacity={0}
+                        />
+                      </linearGradient>
+                      <linearGradient
+                        id="videoGradient"
+                        x1="0"
+                        y1="0"
+                        x2="0"
+                        y2="1"
+                      >
+                        <stop
+                          offset="5%"
+                          stopColor={COLORS.video}
+                          stopOpacity={0.8}
+                        />
+                        <stop
+                          offset="95%"
+                          stopColor={COLORS.video}
+                          stopOpacity={0}
+                        />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
+                    <XAxis
+                      dataKey="date"
+                      tick={{ fill: theme === "dark" ? "#888" : "#666" }}
+                    />
+                    <YAxis
+                      tick={{ fill: theme === "dark" ? "#888" : "#666" }}
+                    />
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: theme === "dark" ? "#1f2937" : "#fff",
+                        border: "1px solid #e5e7eb",
+                        borderRadius: "8px",
+                      }}
+                    />
                     <Area
                       type="monotone"
-                      dataKey="total"
+                      dataKey="voice"
                       stackId="1"
-                      stroke="#10b981"
-                      fill="#10b981"
-                      fillOpacity={0.6}
+                      stroke={COLORS.voice}
+                      fill="url(#voiceGradient)"
+                      name="Voice"
+                    />
+                    <Area
+                      type="monotone"
+                      dataKey="video"
+                      stackId="1"
+                      stroke={COLORS.video}
+                      fill="url(#videoGradient)"
+                      name="Video"
                     />
                   </AreaChart>
                 </ResponsiveContainer>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle>Usage by Endpoint</CardTitle>
-                <CardDescription>Breakdown by API endpoint type</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <ResponsiveContainer width="100%" height={300}>
-                  <PieChart>
-                    <Pie
-                      data={[
-                        { name: "Audio", value: analyticsData.usage.reduce((sum, d) => sum + d.audio, 0) },
-                        { name: "Video", value: analyticsData.usage.reduce((sum, d) => sum + d.video, 0) },
-                        { name: "Avatar", value: analyticsData.usage.reduce((sum, d) => sum + d.avatar, 0) },
-                      ]}
-                      cx="50%"
-                      cy="50%"
-                      labelLine={false}
-                      label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-                      outerRadius={80}
-                      fill="#8884d8"
-                      dataKey="value"
-                    >
-                      {[0, 1, 2].map((index) => (
-                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                      ))}
-                    </Pie>
-                    <Tooltip />
-                  </PieChart>
-                </ResponsiveContainer>
-              </CardContent>
-            </Card>
-          </div>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Detailed Usage Breakdown</CardTitle>
-              <CardDescription>Usage by endpoint over time</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <ResponsiveContainer width="100%" height={400}>
-                <LineChart data={analyticsData.usage}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="date" />
-                  <YAxis />
-                  <Tooltip />
-                  <Line type="monotone" dataKey="audio" stroke="#10b981" strokeWidth={2} />
-                  <Line type="monotone" dataKey="video" stroke="#3b82f6" strokeWidth={2} />
-                  <Line type="monotone" dataKey="avatar" stroke="#f59e0b" strokeWidth={2} />
-                </LineChart>
-              </ResponsiveContainer>
+              )}
             </CardContent>
           </Card>
-        </TabsContent>
 
-        <TabsContent value="performance" className="space-y-6">
+          {/* Usage Distribution */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <Card>
               <CardHeader>
-                <CardTitle>Response Times</CardTitle>
-                <CardDescription>Average response time over time</CardDescription>
+                <CardTitle>Usage by Type</CardTitle>
+                <CardDescription>
+                  Distribution of voice vs video conversations
+                </CardDescription>
               </CardHeader>
               <CardContent>
-                <ResponsiveContainer width="100%" height={300}>
-                  <LineChart data={analyticsData.performance}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="time" tickFormatter={(time) => new Date(time).toLocaleTimeString()} />
-                    <YAxis />
-                    <Tooltip labelFormatter={(time) => new Date(time).toLocaleString()} />
-                    <Line type="monotone" dataKey="avgResponseTime" stroke="#10b981" strokeWidth={2} />
-                  </LineChart>
-                </ResponsiveContainer>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle>Error Rate</CardTitle>
-                <CardDescription>Error rate percentage over time</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <ResponsiveContainer width="100%" height={300}>
-                  <AreaChart data={analyticsData.performance}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="time" tickFormatter={(time) => new Date(time).toLocaleTimeString()} />
-                    <YAxis />
-                    <Tooltip labelFormatter={(time) => new Date(time).toLocaleString()} />
-                    <Area type="monotone" dataKey="errorRate" stroke="#ef4444" fill="#ef4444" fillOpacity={0.6} />
-                  </AreaChart>
-                </ResponsiveContainer>
-              </CardContent>
-            </Card>
-          </div>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Request Volume</CardTitle>
-              <CardDescription>Number of requests per hour</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <ResponsiveContainer width="100%" height={300}>
-                <BarChart data={analyticsData.performance}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="time" tickFormatter={(time) => new Date(time).toLocaleTimeString()} />
-                  <YAxis />
-                  <Tooltip labelFormatter={(time) => new Date(time).toLocaleString()} />
-                  <Bar dataKey="requests" fill="#10b981" />
-                </BarChart>
-              </ResponsiveContainer>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="errors" className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Recent Errors</CardTitle>
-              <CardDescription>Latest API errors and issues</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                {analyticsData.errors.length === 0 ? (
-                  <div className="text-center py-8">
-                    <AlertCircle className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                    <p className="text-gray-600 dark:text-gray-400">No errors found in the selected time range</p>
+                {analyticsData.usageByType.every((item) => item.value === 0) ? (
+                  <div className="text-center py-12 text-muted-foreground">
+                    <TrendingUp className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                    <p>No usage data available</p>
                   </div>
                 ) : (
-                  analyticsData.errors.slice(0, 10).map((error, index) => (
-                    <div key={index} className="flex items-center justify-between p-4 border rounded-lg">
-                      <div className="flex items-center gap-3">
-                        <Badge variant="destructive">{error.response_status}</Badge>
-                        <div>
-                          <p className="font-medium">{error.endpoint}</p>
-                          <p className="text-sm text-muted-foreground">{error.error_message || "Unknown error"}</p>
-                        </div>
-                      </div>
-                      <div className="text-sm text-muted-foreground">{new Date(error.created_at).toLocaleString()}</div>
-                    </div>
-                  ))
+                  <div className="flex items-center justify-center">
+                    <ResponsiveContainer width="100%" height={250}>
+                      <PieChart>
+                        <Pie
+                          data={analyticsData.usageByType.filter(
+                            (item) => item.value > 0
+                          )}
+                          cx="50%"
+                          cy="50%"
+                          labelLine={false}
+                          label={({ name, percent }) =>
+                            `${name}: ${(percent * 100).toFixed(0)}%`
+                          }
+                          outerRadius={80}
+                          fill="#8884d8"
+                          dataKey="value"
+                        >
+                          {analyticsData.usageByType.map((entry, index) => (
+                            <Cell key={`cell-${index}`} fill={entry.color} />
+                          ))}
+                        </Pie>
+                        <Tooltip
+                          contentStyle={{
+                            backgroundColor:
+                              theme === "dark" ? "#1f2937" : "#fff",
+                            border: "1px solid #e5e7eb",
+                            borderRadius: "8px",
+                          }}
+                        />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </div>
                 )}
+              </CardContent>
+            </Card>
+
+            {/* API Key Usage */}
+            {selectedApiKey === "all" && analyticsData.apiKeyUsage && (
+              <Card>
+                <CardHeader>
+                  <CardTitle>Usage by API Key</CardTitle>
+                  <CardDescription>
+                    API calls and minutes per key
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {analyticsData.apiKeyUsage.length === 0 ? (
+                    <div className="text-center py-12 text-muted-foreground">
+                      <Users className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                      <p>No API key usage data</p>
+                    </div>
+                  ) : (
+                    <ResponsiveContainer width="100%" height={250}>
+                      <BarChart data={analyticsData.apiKeyUsage}>
+                        <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
+                        <XAxis
+                          dataKey="name"
+                          tick={{ fill: theme === "dark" ? "#888" : "#666" }}
+                        />
+                        <YAxis
+                          tick={{ fill: theme === "dark" ? "#888" : "#666" }}
+                        />
+                        <Tooltip
+                          contentStyle={{
+                            backgroundColor:
+                              theme === "dark" ? "#1f2937" : "#fff",
+                            border: "1px solid #e5e7eb",
+                            borderRadius: "8px",
+                          }}
+                        />
+                        <Bar
+                          dataKey="calls"
+                          fill={COLORS.voice}
+                          name="API Calls"
+                        />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  )}
+                </CardContent>
+              </Card>
+            )}
+          </div>
+        </TabsContent>
+
+        {/* Usage Details Tab */}
+        <TabsContent value="usage" className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Detailed Usage Metrics</CardTitle>
+              <CardDescription>
+                Comprehensive breakdown of your API usage
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-6">
+                {/* Voice Conversations */}
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                      <Zap className="w-5 h-5 text-green-500" />
+                      <h3 className="font-semibold">Voice Conversations</h3>
+                    </div>
+                    <Badge variant="secondary">
+                      {analyticsData.usageByType[0]?.value || 0} conversations
+                    </Badge>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4 pl-7">
+                    <div className="p-3 bg-muted rounded-lg">
+                      <p className="text-sm text-muted-foreground">
+                        Total Minutes
+                      </p>
+                      <p className="text-xl font-bold">
+                        {analyticsData.overview.totalVoiceMinutes.toFixed(1)}
+                      </p>
+                    </div>
+                    <div className="p-3 bg-muted rounded-lg">
+                      <p className="text-sm text-muted-foreground">
+                        Avg Duration
+                      </p>
+                      <p className="text-xl font-bold">
+                        {analyticsData.usageByType[0]?.value > 0
+                          ? formatDuration(
+                              analyticsData.overview.totalVoiceMinutes /
+                                analyticsData.usageByType[0].value
+                            )
+                          : "0m"}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Video Conversations */}
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                      <Activity className="w-5 h-5 text-blue-500" />
+                      <h3 className="font-semibold">Video Conversations</h3>
+                    </div>
+                    <Badge variant="secondary">
+                      {analyticsData.usageByType[1]?.value || 0} conversations
+                    </Badge>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4 pl-7">
+                    <div className="p-3 bg-muted rounded-lg">
+                      <p className="text-sm text-muted-foreground">
+                        Total Minutes
+                      </p>
+                      <p className="text-xl font-bold">
+                        {analyticsData.overview.totalVideoMinutes.toFixed(1)}
+                      </p>
+                    </div>
+                    <div className="p-3 bg-muted rounded-lg">
+                      <p className="text-sm text-muted-foreground">
+                        Avg Duration
+                      </p>
+                      <p className="text-xl font-bold">
+                        {analyticsData.usageByType[1]?.value > 0
+                          ? formatDuration(
+                              analyticsData.overview.totalVideoMinutes /
+                                analyticsData.usageByType[1].value
+                            )
+                          : "0m"}
+                      </p>
+                    </div>
+                  </div>
+                </div>
               </div>
             </CardContent>
           </Card>
         </TabsContent>
 
-        <TabsContent value="keys" className="space-y-6">
-          <div className="grid gap-4">
-            {analyticsData.apiKeys.map((apiKey) => (
-              <Card key={apiKey.id}>
-                <CardHeader>
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <CardTitle className="flex items-center gap-2">
-                        {apiKey.name}
-                        <Badge variant={apiKey.is_active ? "default" : "destructive"}>
-                          {apiKey.is_active ? "Active" : "Inactive"}
-                        </Badge>
-                      </CardTitle>
-                      <CardDescription>
-                        Created {new Date(apiKey.created_at).toLocaleDateString()} • Last used{" "}
-                        {apiKey.last_used_at ? new Date(apiKey.last_used_at).toLocaleDateString() : "Never"}
-                      </CardDescription>
+        {/* Recent Activity Tab */}
+        <TabsContent value="conversations" className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Recent Conversations</CardTitle>
+              <CardDescription>
+                Latest conversations from your applications
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {analyticsData.recentConversations.length === 0 ? (
+                <div className="text-center py-12 text-muted-foreground">
+                  <MessageSquare className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                  <p>No recent conversations</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {analyticsData.recentConversations.map((conv) => (
+                    <div
+                      key={conv.id}
+                      className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors"
+                    >
+                      <div className="flex-1 space-y-1">
+                        <div className="flex items-center gap-2">
+                          <h4 className="font-medium">{conv.name}</h4>
+                          <Badge
+                            variant={
+                              conv.conversation_type === "voice"
+                                ? "default"
+                                : "secondary"
+                            }
+                          >
+                            {conv.conversation_type}
+                          </Badge>
+                          {conv.status === "completed" ? (
+                            <CheckCircle2 className="w-4 h-4 text-green-500" />
+                          ) : conv.status === "failed" ? (
+                            <XCircle className="w-4 h-4 text-red-500" />
+                          ) : null}
+                        </div>
+                        <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                          <span className="flex items-center gap-1">
+                            <Calendar className="w-3 h-3" />
+                            {new Date(conv.created_at).toLocaleString()}
+                          </span>
+                          {conv.duration_minutes && (
+                            <span className="flex items-center gap-1">
+                              <Clock className="w-3 h-3" />
+                              {formatDuration(conv.duration_minutes)}
+                            </span>
+                          )}
+                          {conv.avatars?.name && (
+                            <span>Avatar: {conv.avatars.name}</span>
+                          )}
+                          {conv.api_keys?.name && (
+                            <span>Key: {conv.api_keys.name}</span>
+                          )}
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div className="text-center p-4 bg-muted rounded-lg">
-                      <p className="text-2xl font-bold text-emerald-600">{apiKey.totalRequests}</p>
-                      <p className="text-sm text-muted-foreground">Total Requests</p>
-                    </div>
-                    <div className="text-center p-4 bg-muted rounded-lg">
-                      <p className="text-2xl font-bold text-green-600">{apiKey.successRate.toFixed(1)}%</p>
-                      <p className="text-sm text-muted-foreground">Success Rate</p>
-                    </div>
-                    <div className="text-center p-4 bg-muted rounded-lg">
-                      <p className="text-2xl font-bold text-blue-600">{apiKey.totalUsage.toFixed(1)}</p>
-                      <p className="text-sm text-muted-foreground">Total Usage (min)</p>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </TabsContent>
       </Tabs>
     </div>
-  )
-}
+  );
+};
 
-export default APIAnalytics
+export default APIAnalytics;

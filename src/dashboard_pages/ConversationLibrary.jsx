@@ -1,598 +1,591 @@
-"use client"
-
-import { useState, useEffect } from "react"
-import { useAuth } from "../contexts/AuthContext"
-import { useTheme } from "../contexts/ThemeContext"
-import supabase from "../supabaseClient"
-import { Link } from "react-router-dom"
+import { useState, useEffect } from "react";
+import { useAuth } from "../contexts/AuthContext";
+import supabase from "../supabaseClient";
+import { motion, AnimatePresence } from "framer-motion";
 import {
-  Phone,
-  Video,
+  Loader2,
+  Search,
   Calendar,
   Clock,
-  Search,
-  Trash2,
-  PhoneOff,
-  Eye,
-  MessageCircle,
+  MessageSquare,
+  Video,
+  Mic,
+  ChevronDown,
+  ChevronRight,
   User,
-  AlertCircle,
-  CheckCircle,
-  XCircle,
-  Loader2,
-} from "lucide-react"
-import { motion, AnimatePresence } from "framer-motion"
+  Brain,
+  Download,
+} from "lucide-react";
 
-const ConversationLibrary = () => {
-  const { user } = useAuth()
-  const { theme } = useTheme()
-  const [conversations, setConversations] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [searchTerm, setSearchTerm] = useState("")
-  const [statusFilter, setStatusFilter] = useState("all")
-  const [typeFilter, setTypeFilter] = useState("all")
-  const [selectedConversation, setSelectedConversation] = useState(null)
-  const [showDetails, setShowDetails] = useState(false)
-  const [actionLoading, setActionLoading] = useState(null)
-  const [error, setError] = useState("")
+// Cache outside component
+const cache = {
+  conversations: null,
+  timestamp: null,
+};
 
-  // Fetch conversations
-  const fetchConversations = async () => {
-    if (!user) return
+const CACHE_DURATION = 2 * 60 * 1000; // 2 minutes
 
-    try {
-      setLoading(true)
-      const {
-        data: { session },
-      } = await supabase.auth.getSession()
+export default function ConversationLibrary() {
+  const { user } = useAuth();
 
-      if (!session) return
+  const [loading, setLoading] = useState(true);
+  const [conversations, setConversations] = useState([]);
+  const [filteredConversations, setFilteredConversations] = useState([]);
 
-      const params = new URLSearchParams()
-      if (statusFilter !== "all") params.append("status", statusFilter)
-      if (typeFilter !== "all") params.append("type", typeFilter)
+  // Filters
+  const [searchTerm, setSearchTerm] = useState("");
+  const [typeFilter, setTypeFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [dateFilter, setDateFilter] = useState("all");
+  const [languageFilter, setLanguageFilter] = useState("all");
 
-      const response = await fetch(`${import.meta.env.VITE_BACKEND_API_URL}/conversations?${params}`, {
-        headers: {
-          Authorization: `Bearer ${session.access_token}`,
-        },
-      })
+  // Expanded conversation for transcript
+  const [expandedId, setExpandedId] = useState(null);
+  const [messages, setMessages] = useState({});
+  const [loadingMessages, setLoadingMessages] = useState({});
 
-      if (response.ok) {
-        const data = await response.json()
-        setConversations(data.conversations || [])
-      } else {
-        throw new Error("Failed to fetch conversations")
-      }
-    } catch (error) {
-      console.error("Error fetching conversations:", error)
-      setError("Failed to load conversations")
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  // End conversation
-  const endConversation = async (conversationId) => {
-    try {
-      setActionLoading(conversationId)
-      const {
-        data: { session },
-      } = await supabase.auth.getSession()
-
-      if (!session) return
-
-      const response = await fetch(`${import.meta.env.VITE_BACKEND_API_URL}/conversations/${conversationId}/end`, {
-        method: "PATCH",
-        headers: {
-          Authorization: `Bearer ${session.access_token}`,
-        },
-      })
-
-      if (response.ok) {
-        // Update local state
-        setConversations((prev) =>
-          prev.map((conv) => (conv.id === conversationId ? { ...conv, status: "ended" } : conv)),
-        )
-      } else {
-        const error = await response.json()
-        throw new Error(error.message || "Failed to end conversation")
-      }
-    } catch (error) {
-      console.error("Error ending conversation:", error)
-      setError("Failed to end conversation: " + error.message)
-    } finally {
-      setActionLoading(null)
-    }
-  }
-
-  // Delete conversation
-  const deleteConversation = async (conversationId) => {
-    if (!confirm("Are you sure you want to delete this conversation? This action cannot be undone.")) {
-      return
-    }
-
-    try {
-      setActionLoading(conversationId)
-      const {
-        data: { session },
-      } = await supabase.auth.getSession()
-
-      if (!session) return
-
-      const response = await fetch(`${import.meta.env.VITE_BACKEND_API_URL}/conversations/${conversationId}`, {
-        method: "DELETE",
-        headers: {
-          Authorization: `Bearer ${session.access_token}`,
-        },
-      })
-
-      if (response.ok) {
-        // Remove from local state
-        setConversations((prev) => prev.filter((conv) => conv.id !== conversationId))
-      } else {
-        const error = await response.json()
-        throw new Error(error.message || "Failed to delete conversation")
-      }
-    } catch (error) {
-      console.error("Error deleting conversation:", error)
-      setError("Failed to delete conversation: " + error.message)
-    } finally {
-      setActionLoading(null)
-    }
-  }
-
-  // View conversation details
-  const viewConversationDetails = async (conversationId) => {
-    try {
-      setActionLoading(conversationId)
-      const {
-        data: { session },
-      } = await supabase.auth.getSession()
-
-      if (!session) return
-
-      const response = await fetch(`${import.meta.env.VITE_BACKEND_API_URL}/conversations/${conversationId}`, {
-        headers: {
-          Authorization: `Bearer ${session.access_token}`,
-        },
-      })
-
-      if (response.ok) {
-        const result = await response.json()
-        setSelectedConversation(result.data)
-        setShowDetails(true)
-      } else {
-        const error = await response.json()
-        throw new Error(error.message || "Failed to fetch conversation details")
-      }
-    } catch (error) {
-      console.error("Error fetching conversation details:", error)
-      setError("Failed to load conversation details: " + error.message)
-    } finally {
-      setActionLoading(null)
-    }
-  }
-
-  // Filter conversations
-  const filteredConversations = conversations.filter((conversation) => {
-    const matchesSearch =
-      conversation.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      conversation.avatars?.name.toLowerCase().includes(searchTerm.toLowerCase())
-
-    return matchesSearch
-  })
-
-  // Get status color and icon
-  const getStatusInfo = (status) => {
-    switch (status) {
-      case "active":
-        return {
-          color: "text-green-500",
-          bgColor: "bg-green-100 dark:bg-green-900/20",
-          icon: <CheckCircle size={16} />,
-          label: "active",
-        }
-      case "ended":
-        return {
-          color: "text-gray-500",
-          bgColor: "bg-gray-100 dark:bg-gray-800",
-          icon: <PhoneOff size={16} />,
-          label: "ended",
-        }
-      case "failed":
-        return {
-          color: "text-red-500",
-          bgColor: "bg-red-100 dark:bg-red-900/20",
-          icon: <XCircle size={16} />,
-          label: "failed",
-        }
-      default:
-        return {
-          color: "text-gray-500",
-          bgColor: "bg-gray-100 dark:bg-gray-800",
-          icon: <AlertCircle size={16} />,
-          label: status,
-        }
-    }
-  }
-
-  // Format date
-  const formatDate = (dateString) => {
-    const date = new Date(dateString)
-    const now = new Date()
-    const diffInHours = (now - date) / (1000 * 60 * 60)
-
-    if (diffInHours < 24) {
-      return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
-    } else if (diffInHours < 24 * 7) {
-      return date.toLocaleDateString([], { weekday: "short", hour: "2-digit", minute: "2-digit" })
-    } else {
-      return date.toLocaleDateString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })
-    }
-  }
+  // Stats
+  const [stats, setStats] = useState({
+    total: 0,
+    voice: 0,
+    video: 0,
+    totalMinutes: 0,
+  });
 
   useEffect(() => {
-    fetchConversations()
-  }, [user, statusFilter, typeFilter])
+    if (user) fetchConversations();
+  }, [user]);
+
+  useEffect(() => {
+    applyFilters();
+  }, [
+    conversations,
+    searchTerm,
+    typeFilter,
+    statusFilter,
+    dateFilter,
+    languageFilter,
+  ]);
+
+  const isCacheValid = () => {
+    return cache.timestamp && Date.now() - cache.timestamp < CACHE_DURATION;
+  };
+
+  const fetchConversations = async () => {
+    try {
+      if (isCacheValid()) {
+        console.log("📦 Using cached conversations");
+        setConversations(cache.conversations);
+        calculateStats(cache.conversations);
+        setLoading(false);
+        return;
+      }
+
+      setLoading(true);
+
+      const { data, error } = await supabase
+        .from("conversations")
+        .select(
+          `
+          *,
+          avatars (id, name, image_url, public_id),
+          personas (id, name, persona_role, public_id)
+        `
+        )
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false });
+
+      if (error) throw error;
+
+      cache.conversations = data || [];
+      cache.timestamp = Date.now();
+
+      setConversations(cache.conversations);
+      calculateStats(cache.conversations);
+    } catch (error) {
+      console.error("Error fetching conversations:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const calculateStats = (convos) => {
+    const total = convos.length;
+    const voice = convos.filter((c) => c.conversation_type === "voice").length;
+    const video = convos.filter((c) => c.conversation_type === "video").length;
+    const totalMinutes = convos.reduce(
+      (sum, c) => sum + (c.duration_minutes || 0),
+      0
+    );
+
+    setStats({ total, voice, video, totalMinutes });
+  };
+
+  const applyFilters = () => {
+    let filtered = [...conversations];
+
+    // Search
+    if (searchTerm) {
+      const term = searchTerm.toLowerCase();
+      filtered = filtered.filter(
+        (c) =>
+          c.avatars?.name.toLowerCase().includes(term) ||
+          c.personas?.name.toLowerCase().includes(term) ||
+          c.conversation_language?.toLowerCase().includes(term) ||
+          c.id.toLowerCase().includes(term)
+      );
+    }
+
+    // Type
+    if (typeFilter !== "all") {
+      filtered = filtered.filter((c) => c.conversation_type === typeFilter);
+    }
+
+    // Status
+    if (statusFilter !== "all") {
+      filtered = filtered.filter((c) => c.status === statusFilter);
+    }
+
+    // Date
+    if (dateFilter !== "all") {
+      const now = new Date();
+      filtered = filtered.filter((c) => {
+        const convDate = new Date(c.created_at);
+        switch (dateFilter) {
+          case "today":
+            return convDate.toDateString() === now.toDateString();
+          case "week":
+            { const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+            return convDate >= weekAgo; }
+          case "month":
+            { const monthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+            return convDate >= monthAgo; }
+          default:
+            return true;
+        }
+      });
+    }
+
+    // Language
+    if (languageFilter !== "all") {
+      filtered = filtered.filter(
+        (c) => c.conversation_language === languageFilter
+      );
+    }
+
+    setFilteredConversations(filtered);
+  };
+
+  const fetchMessages = async (conversationId) => {
+    if (messages[conversationId]) {
+      // Already loaded
+      setExpandedId(expandedId === conversationId ? null : conversationId);
+      return;
+    }
+
+    try {
+      setLoadingMessages((prev) => ({ ...prev, [conversationId]: true }));
+
+      const { data, error } = await supabase
+        .from("conversation_messages")
+        .select("*")
+        .eq("conversation_id", conversationId)
+        .order("created_at", { ascending: true });
+
+      if (error) throw error;
+
+      setMessages((prev) => ({ ...prev, [conversationId]: data || [] }));
+      setExpandedId(conversationId);
+    } catch (error) {
+      console.error("Error fetching messages:", error);
+    } finally {
+      setLoadingMessages((prev) => ({ ...prev, [conversationId]: false }));
+    }
+  };
+
+  const formatDate = (dateString) => {
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffMs = now - date;
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
+
+    if (diffMins < 1) return "Just now";
+    if (diffMins < 60) return `${diffMins}m ago`;
+    if (diffHours < 24) return `${diffHours}h ago`;
+    if (diffDays < 7) return `${diffDays}d ago`;
+
+    return date.toLocaleDateString(undefined, {
+      month: "short",
+      day: "numeric",
+      year: date.getFullYear() !== now.getFullYear() ? "numeric" : undefined,
+    });
+  };
+
+  const formatDuration = (minutes) => {
+    if (!minutes) return "0m";
+    const hrs = Math.floor(minutes / 60);
+    const mins = Math.floor(minutes % 60);
+    return hrs > 0 ? `${hrs}h ${mins}m` : `${mins}m`;
+  };
+
+  const downloadTranscript = (conversation) => {
+    const msgs = messages[conversation.id] || [];
+    const transcript = msgs
+      .map((m) => `[${m.sender_type}] ${m.message_text}`)
+      .join("\n");
+
+    const blob = new Blob([transcript], { type: "text/plain" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `transcript-${conversation.id}.txt`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const uniqueLanguages = [
+    ...new Set(
+      conversations.map((c) => c.conversation_language).filter(Boolean)
+    ),
+  ];
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-gray-50 dark:bg-gray-900">
+        <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
+      </div>
+    );
+  }
 
   return (
-    <div
-      className={`${theme === "dark" ? "bg-gray-900 text-gray-100" : "bg-gray-50 text-gray-900"} min-h-screen p-4 lg:p-8`}
-    >
-      {/* Header */}
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold mb-2">Conversation Library</h1>
-        <p className={`${theme === "dark" ? "text-gray-400" : "text-gray-600"}`}>
-          View and manage your conversation history
-        </p>
-      </div>
-
-      {/* Filters */}
-      <div className="mb-6 flex flex-col sm:flex-row gap-4">
-        {/* Search */}
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
-          <input
-            type="text"
-            placeholder="Search conversations..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className={`w-full pl-10 pr-4 py-2 ${theme === "dark" ? "bg-gray-800 border-gray-700 text-gray-200" : "bg-white border-gray-300 text-gray-900"} border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500`}
-          />
-        </div>
-
-        {/* Status Filter */}
-        <select
-          value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value)}
-          className={`px-4 py-2 ${theme === "dark" ? "bg-gray-800 border-gray-700 text-gray-200" : "bg-white border-gray-300 text-gray-900"} border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500`}
-        >
-          <option value="all">All Status</option>
-          <option value="active">Active</option>
-          <option value="ended">Ended</option>
-          <option value="failed">Failed</option>
-        </select>
-
-        {/* Type Filter */}
-        <select
-          value={typeFilter}
-          onChange={(e) => setTypeFilter(e.target.value)}
-          className={`px-4 py-2 ${theme === "dark" ? "bg-gray-800 border-gray-700 text-gray-200" : "bg-white border-gray-300 text-gray-900"} border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500`}
-        >
-          <option value="all">All Types</option>
-          <option value="voice">Voice</option>
-          <option value="video">Video</option>
-        </select>
-      </div>
-
-      {/* Error Message */}
-      {error && (
-        <div className="mb-6 p-4 bg-red-100 dark:bg-red-900/20 border border-red-300 dark:border-red-700 text-red-700 dark:text-red-400 rounded-lg">
-          {error}
-        </div>
-      )}
-
-      {/* Conversations Grid */}
-      {loading ? (
-        <div className="flex items-center justify-center py-12">
-          <Loader2 className="animate-spin" size={32} />
-          <span className="ml-2">Loading conversations...</span>
-        </div>
-      ) : filteredConversations.length === 0 ? (
-        <div className="text-center py-12">
-          <MessageCircle size={64} className={`mx-auto mb-4 ${theme === "dark" ? "text-gray-600" : "text-gray-400"}`} />
-          <h3 className={`text-xl font-semibold mb-2 ${theme === "dark" ? "text-gray-300" : "text-gray-700"}`}>
-            No conversations found
-          </h3>
-          <p className={`${theme === "dark" ? "text-gray-400" : "text-gray-600"} mb-6`}>
-            {searchTerm || statusFilter !== "all" || typeFilter !== "all"
-              ? "Try adjusting your filters or search terms"
-              : "Start your first conversation to see it here"}
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 pb-20">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Header */}
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
+            Conversation Library
+          </h1>
+          <p className="text-gray-600 dark:text-gray-400">
+            View and manage your conversation history
           </p>
-          <Link
-            to="/dashboard/conversation-studio"
-            className="inline-flex items-center px-6 py-3 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-lg hover:from-purple-600 hover:to-pink-600 transition-colors"
-          >
-            <MessageCircle size={20} className="mr-2" />
-            Start Conversation
-          </Link>
         </div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredConversations.map((conversation) => {
-            const statusInfo = getStatusInfo(conversation.status)
-            return (
+
+        {/* Stats Cards */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+          <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700">
+            <p className="text-sm text-gray-600 dark:text-gray-400">
+              Total Conversations
+            </p>
+            <p className="text-2xl font-bold text-gray-900 dark:text-white mt-1">
+              {stats.total}
+            </p>
+          </div>
+          <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700">
+            <p className="text-sm text-gray-600 dark:text-gray-400">Voice</p>
+            <p className="text-2xl font-bold text-green-600 dark:text-green-400 mt-1">
+              {stats.voice}
+            </p>
+          </div>
+          <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700">
+            <p className="text-sm text-gray-600 dark:text-gray-400">Video</p>
+            <p className="text-2xl font-bold text-blue-600 dark:text-blue-400 mt-1">
+              {stats.video}
+            </p>
+          </div>
+          <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700">
+            <p className="text-sm text-gray-600 dark:text-gray-400">
+              Total Time
+            </p>
+            <p className="text-2xl font-bold text-purple-600 dark:text-purple-400 mt-1">
+              {formatDuration(stats.totalMinutes)}
+            </p>
+          </div>
+        </div>
+
+        {/* Filters */}
+        <div className="bg-white dark:bg-gray-800 rounded-xl p-4 mb-6 border border-gray-200 dark:border-gray-700">
+          <div className="flex flex-wrap gap-4">
+            {/* Search */}
+            <div className="flex-1 min-w-[200px]">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <input
+                  type="text"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  placeholder="Search conversations..."
+                  className="w-full pl-9 pr-3 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-lg text-sm text-gray-900 dark:text-white"
+                />
+              </div>
+            </div>
+
+            {/* Type Filter */}
+            <select
+              value={typeFilter}
+              onChange={(e) => setTypeFilter(e.target.value)}
+              className="px-3 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-lg text-sm text-gray-900 dark:text-white"
+            >
+              <option value="all">All Types</option>
+              <option value="voice">Voice Only</option>
+              <option value="video">Video Only</option>
+            </select>
+
+            {/* Status Filter */}
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              className="px-3 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-lg text-sm text-gray-900 dark:text-white"
+            >
+              <option value="all">All Status</option>
+              <option value="active">Active</option>
+              <option value="ended">Ended</option>
+            </select>
+
+            {/* Date Filter */}
+            <select
+              value={dateFilter}
+              onChange={(e) => setDateFilter(e.target.value)}
+              className="px-3 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-lg text-sm text-gray-900 dark:text-white"
+            >
+              <option value="all">All Time</option>
+              <option value="today">Today</option>
+              <option value="week">Last 7 Days</option>
+              <option value="month">Last 30 Days</option>
+            </select>
+
+            {/* Language Filter */}
+            {uniqueLanguages.length > 0 && (
+              <select
+                value={languageFilter}
+                onChange={(e) => setLanguageFilter(e.target.value)}
+                className="px-3 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-lg text-sm text-gray-900 dark:text-white"
+              >
+                <option value="all">All Languages</option>
+                {uniqueLanguages.map((lang) => (
+                  <option key={lang} value={lang}>
+                    {lang.toUpperCase()}
+                  </option>
+                ))}
+              </select>
+            )}
+
+            {/* Clear Filters */}
+            {(searchTerm ||
+              typeFilter !== "all" ||
+              statusFilter !== "all" ||
+              dateFilter !== "all" ||
+              languageFilter !== "all") && (
+              <button
+                onClick={() => {
+                  setSearchTerm("");
+                  setTypeFilter("all");
+                  setStatusFilter("all");
+                  setDateFilter("all");
+                  setLanguageFilter("all");
+                }}
+                className="px-3 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg text-sm font-medium hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+              >
+                Clear Filters
+              </button>
+            )}
+          </div>
+          <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+            Showing {filteredConversations.length} of {conversations.length}{" "}
+            conversations
+          </p>
+        </div>
+
+        {/* Conversation List */}
+        {filteredConversations.length === 0 ? (
+          <div className="bg-white dark:bg-gray-800 rounded-xl p-12 text-center border border-gray-200 dark:border-gray-700">
+            <MessageSquare className="w-16 h-16 mx-auto mb-4 text-gray-400 dark:text-gray-500" />
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+              No conversations found
+            </h3>
+            <p className="text-sm text-gray-600 dark:text-gray-400">
+              {conversations.length === 0
+                ? "Start your first conversation to see it here"
+                : "Try adjusting your filters"}
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {filteredConversations.map((conversation) => (
               <motion.div
                 key={conversation.id}
-                initial={{ opacity: 0, y: 20 }}
+                initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
-                className={`${theme === "dark" ? "bg-gray-800" : "bg-white"} rounded-xl shadow-lg overflow-hidden hover:shadow-xl transition-shadow`}
+                className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden hover:shadow-lg transition-shadow"
               >
-                {/* Header */}
-                <div className="p-4 border-b border-gray-200 dark:border-gray-700">
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center space-x-2">
-                      {conversation.audio_only ? (
-                        <Phone size={16} className="text-purple-500" />
-                      ) : (
-                        <Video size={16} className="text-pink-500" />
-                      )}
-                      <span
-                        className={`px-2 py-1 rounded-full text-xs font-medium ${statusInfo.bgColor} ${statusInfo.color} flex items-center space-x-1`}
-                      >
-                        {statusInfo.icon}
-                        <span>{statusInfo.label}</span>
-                      </span>
-                    </div>
-                    <div className="flex items-center space-x-1">
-                      <button
-                        onClick={() => viewConversationDetails(conversation.id)}
-                        disabled={actionLoading === conversation.id}
-                        className={`p-1 rounded ${theme === "dark" ? "hover:bg-gray-700" : "hover:bg-gray-100"} transition-colors`}
-                        title="View details"
-                      >
-                        {actionLoading === conversation.id ? (
-                          <Loader2 size={16} className="animate-spin" />
-                        ) : (
-                          <Eye size={16} />
-                        )}
-                      </button>
-                      {conversation.status === "active" && (
-                        <button
-                          onClick={() => endConversation(conversation.id)}
-                          disabled={actionLoading === conversation.id}
-                          className="p-1 rounded text-red-500 hover:bg-red-100 dark:hover:bg-red-900/20 transition-colors"
-                          title="End conversation"
-                        >
-                          <PhoneOff size={16} />
-                        </button>
-                      )}
-                      <button
-                        onClick={() => deleteConversation(conversation.id)}
-                        disabled={actionLoading === conversation.id}
-                        className="p-1 rounded text-red-500 hover:bg-red-100 dark:hover:bg-red-900/20 transition-colors"
-                        title="Delete conversation"
-                      >
-                        <Trash2 size={16} />
-                      </button>
-                    </div>
-                  </div>
-                  <h3 className={`font-semibold ${theme === "dark" ? "text-white" : "text-gray-900"}`}>
-                    {conversation.name}
-                  </h3>
-                </div>
-
-                {/* Avatar Info */}
-                <div className="p-4">
-                  <div className="flex items-center space-x-3 mb-3">
-                    <div className="w-10 h-10 rounded-full overflow-hidden bg-gray-200 dark:bg-gray-700 flex-shrink-0">
+                {/* Main Row */}
+                <div className="p-5">
+                  <div className="flex items-start gap-4">
+                    {/* Avatar */}
+                    <div className="w-14 h-14 rounded-lg overflow-hidden bg-gradient-to-br from-blue-100 to-purple-100 dark:from-blue-900/20 dark:to-purple-900/20 flex-shrink-0">
                       {conversation.avatars?.image_url ? (
                         <img
-                          src={conversation.avatars.image_url || "/placeholder.svg"}
+                          src={conversation.avatars.image_url}
                           alt={conversation.avatars.name}
                           className="w-full h-full object-cover"
                         />
                       ) : (
                         <div className="w-full h-full flex items-center justify-center">
-                          <User size={20} className="text-gray-400" />
+                          <User className="w-6 h-6 text-gray-400" />
                         </div>
                       )}
                     </div>
-                    <div>
-                      <p className={`font-medium ${theme === "dark" ? "text-white" : "text-gray-900"}`}>
-                        with {conversation.avatars?.name || "Unknown Avatar"}
-                      </p>
-                      <p className={`text-sm ${theme === "dark" ? "text-gray-400" : "text-gray-600"}`}>
-                        {conversation.audio_only ? "Voice Chat" : "Video Chat"} {formatDate(conversation.created_at)}
-                      </p>
-                    </div>
-                  </div>
 
-                  {/* Summary */}
-                  {conversation.chat_history?.[0]?.summary && (
-                    <p className={`text-sm ${theme === "dark" ? "text-gray-300" : "text-gray-700"} line-clamp-2`}>
-                      {conversation.chat_history[0].summary}
-                    </p>
-                  )}
-
-                  {/* Metadata */}
-                  <div className="flex items-center justify-between mt-3 pt-3 border-t border-gray-200 dark:border-gray-700">
-                    <div className="flex items-center space-x-4 text-xs text-gray-500">
-                      <div className="flex items-center space-x-1">
-                        <Calendar size={12} />
-                        <span>{formatDate(conversation.created_at)}</span>
-                      </div>
-                      {conversation.chat_history?.[0]?.started_at && conversation.chat_history?.[0]?.ended_at && (
-                        <div className="flex items-center space-x-1">
-                          <Clock size={12} />
-                          <span>
-                            {Math.round(
-                              (new Date(conversation.chat_history[0].ended_at) -
-                                new Date(conversation.chat_history[0].started_at)) /
-                                (1000 * 60),
-                            )}
-                            m
+                    {/* Details */}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-start justify-between gap-2 mb-2">
+                        <h3 className="font-semibold text-gray-900 dark:text-white">
+                          {conversation.avatars?.name || "Unknown Avatar"}
+                        </h3>
+                        <div className="flex items-center gap-2">
+                          {conversation.conversation_type === "voice" ? (
+                            <span className="flex items-center gap-1 px-2 py-1 bg-green-100 dark:bg-green-900/20 text-green-700 dark:text-green-400 text-xs rounded-full">
+                              <Mic className="w-3 h-3" />
+                              Voice
+                            </span>
+                          ) : (
+                            <span className="flex items-center gap-1 px-2 py-1 bg-blue-100 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400 text-xs rounded-full">
+                              <Video className="w-3 h-3" />
+                              Video
+                            </span>
+                          )}
+                          <span
+                            className={`px-2 py-1 text-xs rounded-full ${
+                              conversation.status === "active"
+                                ? "bg-green-100 dark:bg-green-900/20 text-green-700 dark:text-green-400"
+                                : "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400"
+                            }`}
+                          >
+                            {conversation.status}
                           </span>
                         </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              </motion.div>
-            )
-          })}
-        </div>
-      )}
+                      </div>
 
-      {/* Conversation Details Modal */}
-      <AnimatePresence>
-        {showDetails && selectedConversation && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.9 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.9 }}
-              className={`${theme === "dark" ? "bg-gray-800" : "bg-white"} rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto`}
-            >
-              {/* Modal Header */}
-              <div className="p-6 border-b border-gray-200 dark:border-gray-700">
-                <div className="flex items-center justify-between">
-                  <h2 className={`text-xl font-bold ${theme === "dark" ? "text-white" : "text-gray-900"}`}>
-                    Conversation Details
-                  </h2>
-                  <button
-                    onClick={() => setShowDetails(false)}
-                    className={`${theme === "dark" ? "text-gray-400 hover:text-white" : "text-gray-600 hover:text-gray-900"} transition-colors`}
-                  >
-                    <XCircle size={24} />
-                  </button>
-                </div>
-              </div>
-
-              {/* Modal Content */}
-              <div className="p-6">
-                {/* Conversation Info */}
-                <div className="mb-6">
-                  <div className="flex items-center space-x-4 mb-4">
-                    <div className="w-16 h-16 rounded-full overflow-hidden bg-gray-200 dark:bg-gray-700">
-                      {selectedConversation.avatars?.image_url ? (
-                        <img
-                          src={selectedConversation.avatars.image_url || "/placeholder.svg"}
-                          alt={selectedConversation.avatars.name}
-                          className="w-full h-full object-cover"
-                        />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center">
-                          <User size={24} className="text-gray-400" />
+                      {conversation.personas && (
+                        <div className="flex items-center gap-1 text-sm text-purple-600 dark:text-purple-400 mb-2">
+                          <Brain className="w-4 h-4" />
+                          {conversation.personas.name}
                         </div>
                       )}
-                    </div>
-                    <div>
-                      <h3 className={`text-lg font-semibold ${theme === "dark" ? "text-white" : "text-gray-900"}`}>
-                        {selectedConversation.name}
-                      </h3>
-                      <p className={`${theme === "dark" ? "text-gray-400" : "text-gray-600"}`}>
-                        with {selectedConversation.avatars?.name || "Unknown Avatar"}
-                      </p>
-                      <div className="flex items-center space-x-4 mt-2">
-                        <span
-                          className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusInfo(selectedConversation.status).bgColor} ${getStatusInfo(selectedConversation.status).color}`}
-                        >
-                          {getStatusInfo(selectedConversation.status).label}
-                        </span>
-                        <span className="text-sm text-gray-500">
-                          {selectedConversation.audio_only ? "Voice Chat" : "Video Chat"}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
 
-                {/* Chat Messages */}
-                {selectedConversation.chat_history?.[0]?.chat_messages && (
-                  <div className="mb-6">
-                    <h4 className={`text-lg font-semibold mb-4 ${theme === "dark" ? "text-white" : "text-gray-900"}`}>
-                      Chat History
-                    </h4>
-                    <div
-                      className={`${theme === "dark" ? "bg-gray-900" : "bg-gray-50"} rounded-lg p-4 max-h-96 overflow-y-auto`}
-                    >
-                      <div className="space-y-4">
-                        {selectedConversation.chat_history[0].chat_messages.map((message, index) => (
-                          <div
-                            key={index}
-                            className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}
-                          >
-                            <div
-                              className={`max-w-xs px-4 py-2 rounded-lg ${
-                                message.role === "user"
-                                  ? "bg-purple-500 text-white"
-                                  : `${theme === "dark" ? "bg-gray-700 text-gray-200" : "bg-white text-gray-800"} shadow`
-                              }`}
-                            >
-                              <p className="text-sm">{message.parts[0].text}</p>
-                            </div>
+                      <div className="flex flex-wrap items-center gap-3 text-xs text-gray-500 dark:text-gray-400">
+                        <div className="flex items-center gap-1">
+                          <Calendar className="w-3 h-3" />
+                          {formatDate(conversation.created_at)}
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <Clock className="w-3 h-3" />
+                          {formatDuration(conversation.duration_minutes)}
+                        </div>
+                        {conversation.conversation_language && (
+                          <div className="px-2 py-0.5 bg-gray-100 dark:bg-gray-700 rounded">
+                            {conversation.conversation_language.toUpperCase()}
                           </div>
-                        ))}
+                        )}
                       </div>
                     </div>
-                  </div>
-                )}
 
-                {/* Summary */}
-                {selectedConversation.chat_history?.[0]?.summary && (
-                  <div className="mb-6">
-                    <h4 className={`text-lg font-semibold mb-2 ${theme === "dark" ? "text-white" : "text-gray-900"}`}>
-                      Summary
-                    </h4>
-                    <p className={`${theme === "dark" ? "text-gray-300" : "text-gray-700"}`}>
-                      {selectedConversation.chat_history[0].summary}
-                    </p>
-                  </div>
-                )}
-
-                {/* Metadata */}
-                <div className="grid grid-cols-2 gap-4 text-sm">
-                  <div>
-                    <span className={`font-medium ${theme === "dark" ? "text-gray-300" : "text-gray-700"}`}>
-                      Started:
-                    </span>
-                    <p className={`${theme === "dark" ? "text-gray-400" : "text-gray-600"}`}>
-                      {new Date(selectedConversation.created_at).toLocaleString()}
-                    </p>
-                  </div>
-                  <div>
-                    <span className={`font-medium ${theme === "dark" ? "text-gray-300" : "text-gray-700"}`}>
-                      Language:
-                    </span>
-                    <p className={`${theme === "dark" ? "text-gray-400" : "text-gray-600"}`}>
-                      {selectedConversation.conversation_language || "English"}
-                    </p>
-                  </div>
-                  {selectedConversation.chat_history?.[0]?.ended_at && (
-                    <div>
-                      <span className={`font-medium ${theme === "dark" ? "text-gray-300" : "text-gray-700"}`}>
-                        Duration:
-                      </span>
-                      <p className={`${theme === "dark" ? "text-gray-400" : "text-gray-600"}`}>
-                        {Math.round(
-                          (new Date(selectedConversation.chat_history[0].ended_at) -
-                            new Date(selectedConversation.chat_history[0].started_at)) /
-                            (1000 * 60),
-                        )}{" "}
-                        minutes
-                      </p>
+                    {/* Actions */}
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => fetchMessages(conversation.id)}
+                        className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+                        title="View Transcript"
+                      >
+                        {expandedId === conversation.id ? (
+                          <ChevronDown className="w-5 h-5 text-gray-600 dark:text-gray-400" />
+                        ) : (
+                          <ChevronRight className="w-5 h-5 text-gray-600 dark:text-gray-400" />
+                        )}
+                      </button>
                     </div>
-                  )}
+                  </div>
                 </div>
-              </div>
-            </motion.div>
+
+                {/* Expanded Transcript */}
+                <AnimatePresence>
+                  {expandedId === conversation.id && (
+                    <motion.div
+                      initial={{ height: 0, opacity: 0 }}
+                      animate={{ height: "auto", opacity: 1 }}
+                      exit={{ height: 0, opacity: 0 }}
+                      className="border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50"
+                    >
+                      <div className="p-5">
+                        <div className="flex items-center justify-between mb-4">
+                          <h4 className="font-semibold text-gray-900 dark:text-white">
+                            Transcript
+                          </h4>
+                          <button
+                            onClick={() => downloadTranscript(conversation)}
+                            className="flex items-center gap-2 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-medium transition-colors"
+                          >
+                            <Download className="w-3 h-3" />
+                            Download
+                          </button>
+                        </div>
+
+                        {loadingMessages[conversation.id] ? (
+                          <div className="flex items-center justify-center py-8">
+                            <Loader2 className="w-6 h-6 animate-spin text-blue-500" />
+                          </div>
+                        ) : messages[conversation.id]?.length === 0 ? (
+                          <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-8">
+                            No messages in this conversation
+                          </p>
+                        ) : (
+                          <div className="space-y-3 max-h-96 overflow-y-auto">
+                            {messages[conversation.id]?.map((msg) => (
+                              <div
+                                key={msg.id}
+                                className={`flex gap-3 ${
+                                  msg.sender_type === "user"
+                                    ? "justify-end"
+                                    : "justify-start"
+                                }`}
+                              >
+                                <div
+                                  className={`max-w-[80%] px-4 py-2 rounded-lg ${
+                                    msg.sender_type === "user"
+                                      ? "bg-blue-600 text-white"
+                                      : "bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white"
+                                  }`}
+                                >
+                                  <p className="text-sm">{msg.message_text}</p>
+                                  <p
+                                    className={`text-xs mt-1 ${
+                                      msg.sender_type === "user"
+                                        ? "text-blue-100"
+                                        : "text-gray-500 dark:text-gray-400"
+                                    }`}
+                                  >
+                                    {new Date(
+                                      msg.created_at
+                                    ).toLocaleTimeString(undefined, {
+                                      hour: "2-digit",
+                                      minute: "2-digit",
+                                    })}
+                                  </p>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </motion.div>
+            ))}
           </div>
         )}
-      </AnimatePresence>
+      </div>
     </div>
-  )
+  );
 }
-
-export default ConversationLibrary

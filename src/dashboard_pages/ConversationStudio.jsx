@@ -152,7 +152,10 @@ export default function ConversationStudio() {
 
   const canStartConversation = () => {
     if (!usage) return true;
-    return usage.conversation.remaining > 0;
+
+    // ✅ Check correct field based on audioOnly
+    const field = audioOnly ? "voiceConversation" : "videoConversation";
+    return usage[field]?.remaining > 0;
   };
 
   const validateAndStart = () => {

@@ -1,617 +1,424 @@
-import React, { useEffect, useState, useCallback } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { useAuth } from '../contexts/AuthContext';
-import supabase from '../supabaseClient'; // Ensure this is your direct supabase client for file uploads
-import { Loader2, Globe, Lock, Edit, Trash2, Save, X, Mic, Image, Video, Upload, PlayCircle, Info, AlertCircle, CheckCircle } from 'lucide-react';
-import { Link } from 'react-router-dom'; // Import Link for navigation
+import { useState, useEffect } from "react";
+import { useAuth } from "../contexts/AuthContext";
+import supabase from "../supabaseClient";
+import { useNavigate } from "react-router-dom";
+import {
+  Loader2,
+  User,
+  Brain,
+  Plus,
+  Search,
+  Copy,
+  CheckCircle2,
+  Edit,
+  Sparkles,
+} from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
 
-const MyCreations = () => {
-    const { user, supabase: authSupabase } = useAuth(); // Use authSupabase for session and user
-    const [creations, setCreations] = useState([]);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState(null);
-    const [message, setMessage] = useState(null); // For success messages
+export default function MyCreations() {
+  const { user } = useAuth();
+  const navigate = useNavigate();
 
-    // State for editing functionality
-    const [editingAvatar, setEditingAvatar] = useState(null); // Stores the avatar object being edited
-    const [showEditModal, setShowEditModal] = useState(false);
-    const [editFormState, setEditFormState] = useState({
-        name: '',
-        persona_role: '', // Use persona_role instead of personalityData
-        system_prompt: '', // Added system_prompt for editing
-        conversational_context: '', // Added conversational_context for editing
-        is_public: false,
+  const [loading, setLoading] = useState(true);
+  const [avatars, setAvatars] = useState([]);
+  const [personas, setPersonas] = useState([]);
+  const [activeTab, setActiveTab] = useState("avatars");
+  const [searchTerm, setSearchTerm] = useState("");
+  const [copiedId, setCopiedId] = useState(null);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (user) fetchData();
+  }, [user]);
+
+  const fetchData = async () => {
+    try {
+      setLoading(true);
+      setError("");
+
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (!session) return;
+
+      // Fetch avatars
+      const avatarRes = await fetch(
+        `${import.meta.env.VITE_BACKEND_API_URL}/avatars`,
+        {
+          headers: { Authorization: `Bearer ${session.access_token}` },
+        }
+      );
+
+      if (avatarRes.ok) {
+        const data = await avatarRes.json();
+        // Your controller already returns all avatars (user + public + stock),
+        // here we only show user-owned in "My Creations"
+        const mine = (data.data || []).filter(
+          (a) => a.user_id === user.id && !a.is_stock
+        );
+        setAvatars(mine);
+      } else {
+        setError("Failed to load avatars");
+      }
+
+      // Fetch personas
+      const personaRes = await fetch(
+        `${import.meta.env.VITE_BACKEND_API_URL}/personas`,
+        {
+          headers: { Authorization: `Bearer ${session.access_token}` },
+        }
+      );
+
+      if (personaRes.ok) {
+        const data = await personaRes.json();
+        const mine = (data.data || []).filter(
+          (p) => p.user_id === user.id && !p.is_stock
+        );
+        setPersonas(mine);
+      } else {
+        setError("Failed to load personas");
+      }
+    } catch (err) {
+      console.error("Error fetching creations:", err);
+      setError("Failed to load your creations. Please refresh the page.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const copyPublicId = (publicId) => {
+    navigator.clipboard.writeText(publicId);
+    setCopiedId(publicId);
+    setTimeout(() => setCopiedId(null), 2000);
+  };
+
+  const filteredAvatars = avatars.filter(
+    (avatar) =>
+      avatar.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      avatar.public_id?.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  const filteredPersonas = personas.filter(
+    (persona) =>
+      persona.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      persona.public_id?.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  const handleCreateAvatar = () => {
+    navigate("/dashboard/create?type=avatar");
+  };
+
+  const handleCreatePersona = () => {
+    navigate("/dashboard/create?type=persona");
+  };
+
+  const formatDate = (dateString) => {
+    if (!dateString) return "-";
+    return new Date(dateString).toLocaleDateString(undefined, {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
     });
-    const [editImageFile, setEditImageFile] = useState(null);
-    const [editVoiceFile, setEditVoiceFile] = useState(null);
-    const [editVideoFile, setEditVideoFile] = useState(null);
-    const [uploadingEditFiles, setUploadingEditFiles] = useState(false);
+  };
 
-    // State for deletion confirmation
-    const [deletingAvatarId, setDeletingAvatarId] = useState(null); // Stores ID of avatar to be deleted
-
-    // backendRestUrl is no longer used for avatar CRUD operations directly
-    // const backendRestUrl = import.meta.env.VITE_BACKEND_API_URL || 'http://localhost:5000';
-
-    // --- Data Fetching ---
-    const fetchMyCreations = useCallback(async () => {
-        if (!user) {
-            setLoading(false);
-            setError('User not logged in.');
-            return;
-        }
-
-        setLoading(true);
-        setError(null);
-        try {
-            // Fetch only creations owned by the current user
-            // RLS on Supabase will ensure only their data is returned
-            const { data, error: fetchError } = await authSupabase // Use authSupabase for authenticated fetch
-                .from('avatars')
-                .select('*') // Select all columns including new ones
-                .eq('user_id', user.id) // Filter by current user's ID
-                .order('created_at', { ascending: false });
-
-            if (fetchError) {
-                throw fetchError;
-            }
-            setCreations(data);
-        } catch (err) {
-            console.error('Error fetching my creations:', err);
-            setError('Failed to load your creations. ' + err.message);
-        } finally {
-            setLoading(false);
-        }
-    }, [user, authSupabase]); // Dependency on user and authSupabase
-
-    useEffect(() => {
-        fetchMyCreations();
-    }, [fetchMyCreations]); // Re-fetch when fetchMyCreations callback changes
-
-    // --- File Upload Helper for Edit Modal ---
-    const uploadFileToSupabaseStorage = async (file, bucketName, folderName) => {
-        if (!file) return null;
-        setUploadingEditFiles(true); // Indicate file upload is in progress
-        const filePath = `${folderName}/${user.id}/${Date.now()}-${file.name.replace(/\s/g, '_')}`;
-        try {
-            const { error } = await supabase.storage.from(bucketName).upload(filePath, file, {
-                cacheControl: '3600',
-                upsert: false // Do not upsert, throw error if file exists
-            });
-
-            if (error) {
-                throw new Error(`Failed to upload ${file.name}: ${error.message}`);
-            }
-            const { data: publicUrlData } = supabase.storage.from(bucketName).getPublicUrl(filePath);
-            return publicUrlData.publicUrl;
-        } catch (err) {
-            console.error(`Error uploading file to ${folderName}:`, err);
-            setError(`Failed to upload file: ${err.message}`);
-            return null;
-        } finally {
-            setUploadingEditFiles(false); // Reset file upload loading
-        }
-    };
-
-    // --- Handlers for Avatar Actions ---
-
-    // Edit
-    const handleEditClick = (avatar) => {
-        setEditingAvatar(avatar);
-        setEditFormState({
-            name: avatar.name,
-            persona_role: avatar.persona_role || '', // Use persona_role
-            system_prompt: avatar.system_prompt || '', // Populate system_prompt
-            conversational_context: avatar.conversational_context || '', // Populate conversational_context
-            is_public: avatar.is_public,
-        });
-        setEditImageFile(null); // Clear file inputs
-        setEditVoiceFile(null);
-        setEditVideoFile(null);
-        setShowEditModal(true);
-        setError(null); // Clear previous errors
-        setMessage(null); // Clear previous messages
-    };
-
-    const handleSaveEdit = async (e) => {
-        e.preventDefault();
-        if (!editingAvatar || !user) return;
-
-        setLoading(true); // Use main loading for form submission
-        setError(null);
-        setMessage(null);
-
-        try {
-            const { data: { session } } = await authSupabase.auth.getSession();
-            if (!session) {
-                throw new Error("No active session found. Please log in again.");
-            }
-
-            let updatedImageUrl = editingAvatar.image_url;
-            let updatedVoiceUrl = editingAvatar.voice_url;
-            let updatedVideoUrl = editingAvatar.video_url;
-
-            // Upload new files if selected
-            if (editImageFile) {
-                updatedImageUrl = await uploadFileToSupabaseStorage(editImageFile, 'avatar-media', 'avatars/images');
-            }
-            if (editVoiceFile) {
-                updatedVoiceUrl = await uploadFileToSupabaseStorage(editVoiceFile, 'avatar-media', 'avatars/voices');
-            }
-            if (editVideoFile) {
-                updatedVideoUrl = await uploadFileToSupabaseStorage(editVideoFile, 'avatar-media', 'avatars/videos');
-            }
-
-            // Construct update payload for Supabase
-            const updatePayload = {
-                name: editFormState.name,
-                image_url: updatedImageUrl,
-                voice_url: updatedVoiceUrl,
-                video_url: updatedVideoUrl,
-                is_public: editFormState.isPublic,
-                persona_role: editFormState.persona_role, // Use persona_role
-                system_prompt: editFormState.system_prompt, // Update system_prompt
-                conversational_context: editFormState.conversational_context, // Update conversational_context
-                updated_at: new Date().toISOString(), // Update timestamp
-            };
-
-            // Directly update Supabase table instead of backend REST endpoint
-            const { error: updateError } = await supabase
-                .from('avatars')
-                .update(updatePayload)
-                .eq('id', editingAvatar.id)
-                .eq('user_id', user.id); // Ensure only owner can update
-
-            if (updateError) {
-                throw updateError;
-            }
-
-            setMessage('Avatar updated successfully!');
-            setShowEditModal(false);
-            setEditingAvatar(null);
-            setEditImageFile(null);
-            setEditVoiceFile(null);
-            setEditVideoFile(null);
-            fetchMyCreations(); // Re-fetch to update the list
-        } catch (err) {
-            console.error('Error saving avatar:', err);
-            setError(err.message || 'An unexpected error occurred while saving.');
-        } finally {
-            setLoading(false);
-            setTimeout(() => setMessage(null), 3000); // Clear messages after 3 seconds
-            setTimeout(() => setError(null), 3000);
-        }
-    };
-
-    // Delete
-    const handleDeleteClick = (avatarId) => {
-        setDeletingAvatarId(avatarId);
-        setError(null); // Clear previous errors
-        setMessage(null); // Clear previous messages
-    };
-
-    const confirmDelete = async () => {
-        if (!deletingAvatarId || !user) return;
-
-        setLoading(true); // Set main loading state for deletion
-        setError(null);
-        setMessage(null);
-
-        try {
-            // Directly delete from Supabase table instead of backend REST endpoint
-            const { error: deleteError } = await supabase
-                .from('avatars')
-                .delete()
-                .eq('id', deletingAvatarId)
-                .eq('user_id', user.id); // Ensure only owner can delete
-
-            if (deleteError) {
-                throw deleteError;
-            }
-
-            setMessage('Avatar deleted successfully!');
-            setDeletingAvatarId(null);
-            fetchMyCreations(); // Re-fetch to update the list
-        } catch (err) {
-            console.error('Error deleting avatar:', err);
-            setError(err.message || 'An unexpected error occurred during deletion.');
-        } finally {
-            setLoading(false);
-            setTimeout(() => setMessage(null), 3000); // Clear messages after 3 seconds
-            setTimeout(() => setError(null), 3000);
-        }
-    };
-
-    const cancelDelete = () => {
-        setDeletingAvatarId(null);
-    };
-
-    // Toggle Public/Private
-    const handleTogglePublic = async (avatar) => {
-        if (!user) {
-            setError('You must be logged in to modify avatars.');
-            return;
-        }
-
-        setLoading(true); // Indicate loading for this specific action
-        setError(null);
-        setMessage(null);
-
-        try {
-            const newPublicStatus = !avatar.is_public;
-            // Directly update Supabase table instead of backend REST endpoint
-            const { error: updateError } = await supabase
-                .from('avatars')
-                .update({ is_public: newPublicStatus, updated_at: new Date().toISOString() })
-                .eq('id', avatar.id)
-                .eq('user_id', user.id); // Ensure only owner can update
-
-            if (updateError) {
-                throw updateError;
-            }
-
-            setMessage(`Avatar status changed to ${newPublicStatus ? 'Public' : 'Private'}!`);
-            fetchMyCreations(); // Re-fetch to update the list
-        } catch (err) {
-            console.error('Error toggling public status:', err);
-            setError(err.message || 'An unexpected error occurred while toggling status.');
-        } finally {
-            setLoading(false);
-            setTimeout(() => setMessage(null), 3000); // Clear messages after 3 seconds
-            setTimeout(() => setError(null), 3000);
-        }
-    };
-
-
-    if (loading && !creations.length) return <div className="text-center text-gray-700 dark:text-gray-300 p-8"><Loader2 className="animate-spin inline-block mr-2" size={24} /> Loading your creations...</div>;
-    if (error && !creations.length) return <div className="text-center text-red-500 p-8">Error: {error}</div>;
-
-
+  if (loading) {
     return (
-        <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5 }}
-            className="p-4 sm:p-8 rounded-2xl bg-white dark:bg-gray-900 shadow-xl border border-gray-200 dark:border-gray-800 min-h-screen max-w-7xl mx-auto my-8"
-        >
-            <h1 className="text-3xl sm:text-4xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent mb-4 sm:mb-6">
-                My AI Creations
-            </h1>
-            <p className="text-base sm:text-lg text-gray-600 dark:text-gray-400 mb-8">
-                Here are all the custom avatars you've created. Manage, edit, and share them with ease.
-            </p>
-
-            {/* Global Messages */}
-            <AnimatePresence>
-                {message && (
-                    <motion.p
-                        initial={{ opacity: 0, y: -20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: -20 }}
-                        className="bg-green-100 dark:bg-green-900/20 text-green-700 dark:text-green-300 px-4 py-3 rounded-md relative mb-4 text-sm"
-                    >
-                        <CheckCircle size={16} className="inline-block mr-2" />{message}
-                    </motion.p>
-                )}
-                {error && (
-                    <motion.p
-                        initial={{ opacity: 0, y: -20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: -20 }}
-                        className="bg-red-100 dark:bg-red-900/20 text-red-700 dark:text-red-300 px-4 py-3 rounded-md relative mb-4 text-sm"
-                    >
-                        <AlertCircle size={16} className="inline-block mr-2" />{error}
-                    </motion.p>
-                )}
-            </AnimatePresence>
-
-            {creations.length === 0 && !loading ? (
-                <div className="text-center p-10 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
-                    <p className="text-lg text-gray-600 dark:text-gray-400 mb-4">You haven't created any custom avatars yet.</p>
-                    <Link to="/dashboard/avatars/create" className="inline-flex items-center px-6 py-3 bg-gradient-to-r from-purple-600 to-pink-600 text-white font-semibold rounded-lg shadow-md hover:from-purple-700 hover:to-pink-700 transition-all duration-200">
-                        <Upload size={20} className="mr-2" /> Create Your First Avatar
-                    </Link>
-                </div>
-            ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                    {creations.map((creation) => (
-                        <motion.div
-                            key={creation.id}
-                            initial={{ opacity: 0, scale: 0.9 }}
-                            animate={{ opacity: 1, scale: 1 }}
-                            transition={{ duration: 0.3 }}
-                            whileHover={{ scale: 1.03, boxShadow: "0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)" }}
-                            className="bg-gray-50 dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 flex flex-col overflow-hidden shadow-sm"
-                        >
-                            {/* Media Display */}
-                            <div className="relative w-full aspect-square bg-gray-200 dark:bg-gray-700 flex items-center justify-center overflow-hidden">
-                                {creation.image_url && !creation.video_url ? (
-                                    <img src={creation.image_url} alt={creation.name} className="w-full h-full object-contain" />
-                                ) : creation.video_url ? (
-                                    <video src={creation.video_url} controls className="w-full h-full object-contain" />
-                                ) : (
-                                    <Image size={48} className="text-gray-400" />
-                                )}
-                            </div>
-
-                            {/* Content Area */}
-                            <div className="p-4 flex-grow flex flex-col">
-                                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-1 truncate">{creation.name}</h3>
-                                <p className="text-xs text-gray-500 dark:text-gray-400 mb-2 truncate">{creation.persona_role || 'No role defined'}</p>
-                                <p className="text-sm text-gray-700 dark:text-gray-300 mb-3 line-clamp-2">{creation.system_prompt || 'No system prompt.'}</p>
-
-                                {/* Voice Player */}
-                                {creation.voice_url && (
-                                    <div className="w-full mb-3">
-                                        <audio controls src={creation.voice_url} className="w-full rounded-md" />
-                                    </div>
-                                )}
-                                
-                                {/* Status */}
-                                <div className="flex items-center gap-2 text-xs font-medium mb-4">
-                                    {creation.is_public ? (
-                                        <span className="flex items-center text-green-600 dark:text-green-400 bg-green-100 dark:bg-green-900/20 px-2 py-1 rounded-full">
-                                            <Globe size={14} className="mr-1" /> Public
-                                        </span>
-                                    ) : (
-                                        <span className="flex items-center text-red-600 dark:text-red-400 bg-red-100 dark:bg-red-900/20 px-2 py-1 rounded-full">
-                                            <Lock size={14} className="mr-1" /> Private
-                                        </span>
-                                    )}
-                                </div>
-
-                                {/* Action Buttons */}
-                                <div className="flex flex-wrap gap-2 mt-auto">
-                                    <button
-                                        onClick={() => handleEditClick(creation)}
-                                        className="flex-1 min-w-[80px] px-3 py-2 bg-blue-500/10 text-blue-400 rounded-lg hover:bg-blue-500/20 transition-colors flex items-center justify-center gap-1 text-xs font-medium"
-                                        title="Edit Avatar"
-                                    >
-                                        <Edit size={14} /> Edit
-                                    </button>
-                                    <button
-                                        onClick={() => handleDeleteClick(creation.id)}
-                                        className="flex-1 min-w-[80px] px-3 py-2 bg-red-500/10 text-red-400 rounded-lg hover:bg-red-500/20 transition-colors flex items-center justify-center gap-1 text-xs font-medium"
-                                        title="Delete Avatar"
-                                    >
-                                        <Trash2 size={14} /> Delete
-                                    </button>
-                                    <button
-                                        onClick={() => handleTogglePublic(creation)}
-                                        className={`flex-1 min-w-[80px] px-3 py-2 rounded-lg hover:opacity-80 transition-colors flex items-center justify-center gap-1 text-xs font-medium
-                                            ${creation.is_public ? 'bg-red-500/10 text-red-400' : 'bg-green-500/10 text-green-400'}`}
-                                        title={creation.is_public ? "Make Private" : "Make Public"}
-                                    >
-                                        {creation.is_public ? <Lock size={14} /> : <Globe size={14} />}
-                                        {creation.is_public ? 'Private' : 'Public'}
-                                    </button>
-                                </div>
-                            </div>
-                        </motion.div>
-                    ))}
-                </div>
-            )}
-
-            {/* Edit Avatar Modal */}
-            <AnimatePresence>
-                {showEditModal && editingAvatar && (
-                    <motion.div
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        exit={{ opacity: 0 }}
-                        className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50"
-                        onClick={() => setShowEditModal(false)} // Close when clicking outside
-                    >
-                        <motion.div
-                            initial={{ scale: 0.9, opacity: 0 }}
-                            animate={{ scale: 1, opacity: 1 }}
-                            exit={{ scale: 0.9, opacity: 0 }}
-                            className="bg-white dark:bg-gray-900 p-6 sm:p-8 rounded-xl shadow-2xl max-w-lg w-full relative border border-gray-200 dark:border-gray-700 max-h-[90vh] overflow-y-auto" // Added max-h and overflow-y-auto
-                            onClick={(e) => e.stopPropagation()} // Prevent click from closing modal
-                        >
-                            <button
-                                onClick={() => setShowEditModal(false)}
-                                className="absolute top-4 right-4 p-2 rounded-full bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors text-gray-600 dark:text-gray-300"
-                                title="Close"
-                            >
-                                <X size={20} />
-                            </button>
-                            <h2 className="text-2xl sm:text-3xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent mb-6">
-                                Edit Avatar: {editingAvatar.name}
-                            </h2>
-                            <form onSubmit={handleSaveEdit} className="space-y-4"> {/* Reduced space-y */}
-                                <div>
-                                    <label htmlFor="editName" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Avatar Name</label> {/* Reduced mb */}
-                                    <input
-                                        type="text"
-                                        id="editName"
-                                        value={editFormState.name}
-                                        onChange={(e) => setEditFormState({ ...editFormState, name: e.target.value })}
-                                        required
-                                        className="w-full p-2 text-sm rounded-lg bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 focus:ring-2 focus:ring-purple-500 outline-none text-gray-900 dark:text-white" // Reduced padding and font size
-                                    />
-                                </div>
-                                <div>
-                                    <label htmlFor="editPersonaRole" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Persona Role (Optional)</label> {/* Reduced mb */}
-                                    <input
-                                        type="text"
-                                        id="editPersonaRole"
-                                        value={editFormState.persona_role}
-                                        onChange={(e) => setEditFormState({ ...editFormState, persona_role: e.target.value })}
-                                        className="w-full p-2 text-sm rounded-lg bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 focus:ring-2 focus:ring-purple-500 outline-none text-gray-900 dark:text-white" // Reduced padding and font size
-                                        placeholder="e.g., Financial Advisor, Sales Coach"
-                                    />
-                                </div>
-                                <div>
-                                    <label htmlFor="editSystemPrompt" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">System Prompt (Persona)</label> {/* Reduced mb */}
-                                    <textarea
-                                        id="editSystemPrompt"
-                                        value={editFormState.system_prompt}
-                                        onChange={(e) => setEditFormState({ ...editFormState, system_prompt: e.target.value })}
-                                        rows="3" // Reduced rows
-                                        className="w-full p-2 text-sm rounded-lg bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 focus:ring-2 focus:ring-purple-500 outline-none text-gray-900 dark:text-white" // Reduced padding and font size
-                                        placeholder="Describe the avatar's personality, expertise, or role."
-                                    ></textarea>
-                                </div>
-                                <div>
-                                    <label htmlFor="editConversationalContext" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Conversational Context (Optional)</label> {/* Reduced mb */}
-                                    <textarea
-                                        id="editConversationalContext"
-                                        value={editFormState.conversational_context}
-                                        onChange={(e) => setEditFormState({ ...editFormState, conversational_context: e.target.value })}
-                                        rows="2" // Reduced rows
-                                        className="w-full p-2 text-sm rounded-lg bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 focus:ring-2 focus:ring-purple-500 outline-none text-gray-900 dark:text-white" // Reduced padding and font size
-                                        placeholder="Additional context for specific conversation flows."
-                                    ></textarea>
-                                </div>
-
-                                <div className="grid grid-cols-1 md:grid-cols-3 gap-3"> {/* Reduced gap */}
-                                    {/* Image Upload */}
-                                    <div className="flex flex-col items-center p-3 bg-gray-100 dark:bg-gray-800 rounded-lg border border-gray-300 dark:border-gray-700"> {/* Reduced padding */}
-                                        <Image className="w-7 h-7 text-purple-500 mb-1" /> {/* Reduced size and mb */}
-                                        <label htmlFor="editImageUpload" className="cursor-pointer bg-purple-500/10 text-purple-400 px-2 py-1 rounded-lg hover:bg-purple-500/20 transition-colors text-xs"> {/* Reduced padding and font size */}
-                                            <Upload size={14} className="inline-block mr-1" /> New Image
-                                        </label>
-                                        <input
-                                            id="editImageUpload"
-                                            type="file"
-                                            accept="image/*"
-                                            onChange={(e) => setEditImageFile(e.target.files[0])}
-                                            className="hidden"
-                                        />
-                                        {editImageFile ? <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 truncate">{editImageFile.name}</p> : <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Current: <a href={editingAvatar.image_url} target="_blank" rel="noopener noreferrer" className="underline">View</a></p>}
-                                    </div>
-
-                                    {/* Voice Upload */}
-                                    <div className="flex flex-col items-center p-3 bg-gray-100 dark:bg-gray-800 rounded-lg border border-gray-300 dark:border-gray-700"> {/* Reduced padding */}
-                                        <Mic className="w-7 h-7 text-pink-500 mb-1" /> {/* Reduced size and mb */}
-                                        <label htmlFor="editVoiceUpload" className="cursor-pointer bg-pink-500/10 text-pink-400 px-2 py-1 rounded-lg hover:bg-pink-500/20 transition-colors text-xs"> {/* Reduced padding and font size */}
-                                            <Upload size={14} className="inline-block mr-1" /> New Voice
-                                        </label>
-                                        <input
-                                            id="editVoiceUpload"
-                                            type="file"
-                                            accept="audio/*"
-                                            onChange={(e) => setEditVoiceFile(e.target.files[0])}
-                                            className="hidden"
-                                        />
-                                        {editVoiceFile ? <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 truncate">{editVoiceFile.name}</p> : <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Current: <a href={editingAvatar.voice_url} target="_blank" rel="noopener noreferrer" className="underline">Listen</a></p>}
-                                    </div>
-
-                                    {/* Video Upload */}
-                                    <div className="flex flex-col items-center p-3 bg-gray-100 dark:bg-gray-800 rounded-lg border border-gray-300 dark:border-gray-700"> {/* Reduced padding */}
-                                        <Video className="w-7 h-7 text-blue-500 mb-1" /> {/* Reduced size and mb */}
-                                        <label htmlFor="editVideoUpload" className="cursor-pointer bg-blue-500/10 text-blue-400 px-2 py-1 rounded-lg hover:bg-blue-500/20 transition-colors text-xs"> {/* Reduced padding and font size */}
-                                            <Upload size={14} className="inline-block mr-1" /> New Video
-                                        </label>
-                                        <input
-                                            id="editVideoUpload"
-                                            type="file"
-                                            accept="video/*"
-                                            onChange={(e) => setEditVideoFile(e.target.files[0])}
-                                            className="hidden"
-                                        />
-                                        {editVideoFile ? <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 truncate">{editVideoFile.name}</p> : <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Current: <a href={editingAvatar.video_url} target="_blank" rel="noopener noreferrer" className="underline">Watch</a></p>}
-                                    </div>
-                                </div>
-
-                                {/* Public/Private Toggle */}
-                                <div className="flex items-center justify-center p-3 bg-gray-100 dark:bg-gray-800 rounded-lg border border-gray-300 dark:border-gray-700"> {/* Reduced padding */}
-                                    <button
-                                        type="button"
-                                        onClick={() => setEditFormState({ ...editFormState, isPublic: !editFormState.isPublic })}
-                                        className={`flex items-center gap-2 px-3 py-1 rounded-lg font-semibold transition-colors duration-200 text-sm
-                                            ${editFormState.isPublic
-                                                ? 'bg-green-500/10 text-green-400 hover:bg-green-500/20'
-                                                : 'bg-red-500/10 text-red-400 hover:bg-red-500/20'
-                                            }`} // Reduced padding and font size
-                                    >
-                                        {editFormState.isPublic ? <Globe size={18} /> : <Lock size={18} />} {/* Reduced icon size */}
-                                        {editFormState.isPublic ? 'Public' : 'Private'}
-                                    </button>
-                                </div>
-
-                                <motion.button
-                                    type="submit"
-                                    disabled={uploadingEditFiles || !editFormState.name.trim() || loading}
-                                    whileHover={{ scale: 1.02 }}
-                                    whileTap={{ scale: 0.98 }}
-                                    className="w-full py-2 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-lg font-semibold text-base hover:from-purple-700 hover:to-pink-700 transition-all duration-200 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed" // Reduced padding and font size
-                                >
-                                    {loading || uploadingEditFiles ? <Loader2 className="animate-spin" size={18} /> : <Save size={18} />} {/* Reduced icon size */}
-                                    {loading || uploadingEditFiles ? 'Saving...' : 'Save Changes'}
-                                </motion.button>
-                                <AnimatePresence>
-                                    {error && (
-                                        <motion.p
-                                            initial={{ opacity: 0, y: -10 }}
-                                            animate={{ opacity: 1, y: 0 }}
-                                            exit={{ opacity: 0, y: -10 }}
-                                            className="text-red-500 text-center mt-2 text-xs flex items-center justify-center gap-1" // Reduced font size
-                                        >
-                                            <AlertCircle size={14} />{error} {/* Reduced icon size */}
-                                        </motion.p>
-                                    )}
-                                    {message && (
-                                        <motion.p
-                                            initial={{ opacity: 0, y: -10 }}
-                                            animate={{ opacity: 1, y: 0 }}
-                                            exit={{ opacity: 0, y: -10 }}
-                                            className="text-green-500 text-center mt-2 text-xs flex items-center justify-center gap-1" // Reduced font size
-                                        >
-                                            <CheckCircle size={14} />{message} {/* Reduced icon size */}
-                                        </motion.p>
-                                    )}
-                                </AnimatePresence>
-                            </form>
-                        </motion.div>
-                    </motion.div>
-                )}
-            </AnimatePresence>
-
-            {/* Delete Confirmation Modal */}
-            <AnimatePresence>
-                {deletingAvatarId && (
-                    <motion.div
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        exit={{ opacity: 0 }}
-                        className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50"
-                        onClick={cancelDelete}
-                    >
-                        <motion.div
-                            initial={{ scale: 0.9, opacity: 0 }}
-                            animate={{ scale: 1, opacity: 1 }}
-                            exit={{ scale: 0.9, opacity: 0 }}
-                            className="bg-white dark:bg-gray-900 p-8 rounded-xl shadow-2xl max-w-md w-full relative text-center border border-gray-200 dark:border-gray-700"
-                            onClick={(e) => e.stopPropagation()}
-                        >
-                            <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">Confirm Deletion</h2>
-                            <p className="text-gray-600 dark:text-gray-400 mb-6">Are you sure you want to delete this avatar? This action cannot be undone.</p>
-                            <div className="flex justify-center gap-4">
-                                <button
-                                    onClick={confirmDelete}
-                                    className="px-6 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
-                                    disabled={loading}
-                                >
-                                    {loading ? <Loader2 className="animate-spin" size={16} /> : <Trash2 size={16} />}
-                                    {loading ? 'Deleting...' : 'Delete'}
-                                </button>
-                                <button
-                                    onClick={cancelDelete}
-                                    className="px-6 py-2 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors disabled:opacity-50"
-                                    disabled={loading}
-                                >
-                                    Cancel
-                                </button>
-                            </div>
-                            {error && <p className="text-red-500 text-center mt-4 text-sm flex items-center justify-center gap-1"><AlertCircle size={16} />{error}</p>}
-                        </motion.div>
-                    </motion.div>
-                )}
-            </AnimatePresence>
-        </motion.div>
+      <div className="flex items-center justify-center min-h-screen bg-gray-50 dark:bg-gray-900">
+        <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
+      </div>
     );
-};
+  }
 
-export default MyCreations;
+  return (
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 pb-20">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Header */}
+        <div className="mb-8 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
+              My Creations
+            </h1>
+            <p className="text-gray-600 dark:text-gray-400">
+              Manage your custom avatars and personas
+            </p>
+          </div>
+          <div className="flex gap-3">
+            <button
+              onClick={handleCreateAvatar}
+              className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors"
+            >
+              <Plus className="w-4 h-4" />
+              New Avatar
+            </button>
+            <button
+              onClick={handleCreatePersona}
+              className="inline-flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-sm font-medium transition-colors"
+            >
+              <Plus className="w-4 h-4" />
+              New Persona
+            </button>
+          </div>
+        </div>
+
+        {/* Error banner */}
+        <AnimatePresence>
+          {error && (
+            <motion.div
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              className="mb-6 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-sm text-red-700 dark:text-red-300"
+            >
+              {error}
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Tabs */}
+        <div className="mb-6 border-b border-gray-200 dark:border-gray-700">
+          <div className="flex space-x-8">
+            <button
+              onClick={() => setActiveTab("avatars")}
+              className={`pb-4 px-1 border-b-2 font-medium text-sm transition-colors ${
+                activeTab === "avatars"
+                  ? "border-blue-500 text-blue-600 dark:text-blue-400"
+                  : "border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
+              }`}
+            >
+              <div className="flex items-center gap-2">
+                <User className="w-4 h-4" />
+                Avatars ({avatars.length})
+              </div>
+            </button>
+            <button
+              onClick={() => setActiveTab("personas")}
+              className={`pb-4 px-1 border-b-2 font-medium text-sm transition-colors ${
+                activeTab === "personas"
+                  ? "border-purple-500 text-purple-600 dark:text-purple-400"
+                  : "border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
+              }`}
+            >
+              <div className="flex items-center gap-2">
+                <Brain className="w-4 h-4" />
+                Personas ({personas.length})
+              </div>
+            </button>
+          </div>
+        </div>
+
+        {/* Search */}
+        <div className="mb-6">
+          <div className="relative max-w-md">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+            <input
+              type="text"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder={`Search your ${activeTab}...`}
+              className="w-full pl-10 pr-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            />
+          </div>
+        </div>
+
+        {/* Content */}
+        {activeTab === "avatars" ? (
+          avatars.length === 0 ? (
+            <EmptyState
+              icon={User}
+              title="No avatars yet"
+              description="Create your first custom avatar to bring your ideas to life."
+              actionLabel="Create Avatar"
+              onAction={handleCreateAvatar}
+            />
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+              {filteredAvatars.map((avatar) => (
+                <motion.div
+                  key={avatar.id}
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="bg-white dark:bg-gray-800 rounded-xl overflow-hidden border border-gray-200 dark:border-gray-700 hover:shadow-lg transition-shadow flex flex-col"
+                >
+                  <div className="aspect-square bg-gradient-to-br from-blue-100 to-purple-100 dark:from-blue-900/20 dark:to-purple-900/20 relative">
+                    {avatar.image_url ? (
+                      <img
+                        src={avatar.image_url}
+                        alt={avatar.name}
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center text-gray-400">
+                        <User className="w-16 h-16" />
+                      </div>
+                    )}
+                    <div className="absolute top-2 left-2 px-2 py-1 bg-black/60 text-white text-xs rounded-full flex items-center gap-1">
+                      <Sparkles className="w-3 h-3" />
+                      My Avatar
+                    </div>
+                  </div>
+                  <div className="p-4 flex-1 flex flex-col">
+                    <h3 className="font-bold text-gray-900 dark:text-white mb-1 truncate">
+                      {avatar.name}
+                    </h3>
+                    {avatar.description && (
+                      <p className="text-sm text-gray-600 dark:text-gray-400 mb-2 line-clamp-2">
+                        {avatar.description}
+                      </p>
+                    )}
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
+                      Created: {formatDate(avatar.created_at)}
+                    </p>
+                    <div className="flex items-center gap-2 mb-3">
+                      <code className="flex-1 text-xs font-mono text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-900 px-2 py-1 rounded truncate">
+                        {avatar.public_id}
+                      </code>
+                      <button
+                        onClick={() => copyPublicId(avatar.public_id)}
+                        className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors"
+                      >
+                        {copiedId === avatar.public_id ? (
+                          <CheckCircle2 className="w-4 h-4 text-green-500" />
+                        ) : (
+                          <Copy className="w-4 h-4 text-gray-400" />
+                        )}
+                      </button>
+                    </div>
+                    <div className="flex items-center justify-between gap-2 mt-auto">
+                      <button
+                        onClick={() =>
+                          navigate(`/dashboard/chat?avatar=${avatar.id}`)
+                        }
+                        className="flex-1 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-medium transition-colors"
+                      >
+                        Start Conversation
+                      </button>
+                      <button
+                        onClick={() =>
+                          navigate(`/dashboard/create?type=avatar&edit=${avatar.id}`)
+                        }
+                        className="p-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+                        title="Edit"
+                      >
+                        <Edit className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                </motion.div>
+              ))}
+            </div>
+          )
+        ) : personas.length === 0 ? (
+          <EmptyState
+            icon={Brain}
+            title="No personas yet"
+            description="Create a persona to define how your avatar thinks and talks."
+            actionLabel="Create Persona"
+            onAction={handleCreatePersona}
+          />
+        ) : (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {filteredPersonas.map((persona) => (
+              <motion.div
+                key={persona.id}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="bg-white dark:bg-gray-800 rounded-xl p-6 border border-gray-200 dark:border-gray-700 hover:shadow-lg transition-shadow flex flex-col"
+              >
+                <div className="flex items-start gap-4">
+                  <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-pink-500 rounded-xl flex items-center justify-center flex-shrink-0">
+                    <Brain className="w-7 h-7 text-white" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between gap-2 mb-2">
+                      <h3 className="font-bold text-lg text-gray-900 dark:text-white truncate">
+                        {persona.name}
+                      </h3>
+                    </div>
+                    {persona.persona_role && (
+                      <p className="text-sm text-purple-600 dark:text-purple-400 font-medium mb-1">
+                        {persona.persona_role}
+                      </p>
+                    )}
+                    {persona.description && (
+                      <p className="text-sm text-gray-600 dark:text-gray-400 mb-2 line-clamp-2">
+                        {persona.description}
+                      </p>
+                    )}
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
+                      Created: {formatDate(persona.created_at)}
+                    </p>
+                    <div className="flex items-center gap-2 mb-3">
+                      <code className="flex-1 text-xs font-mono text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-900 px-2 py-1 rounded truncate">
+                        {persona.public_id}
+                      </code>
+                      <button
+                        onClick={() => copyPublicId(persona.public_id)}
+                        className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors"
+                      >
+                        {copiedId === persona.public_id ? (
+                          <CheckCircle2 className="w-4 h-4 text-green-500" />
+                        ) : (
+                          <Copy className="w-4 h-4 text-gray-400" />
+                        )}
+                      </button>
+                    </div>
+                    {persona.system_prompt && (
+                      <div className="mb-3 p-3 bg-gray-50 dark:bg-gray-900/50 rounded-lg border border-gray-200 dark:border-gray-700">
+                        <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+                          System Prompt
+                        </p>
+                        <p className="text-xs text-gray-700 dark:text-gray-300 line-clamp-2">
+                          {persona.system_prompt}
+                        </p>
+                      </div>
+                    )}
+                    <div className="flex items-center justify-between gap-2 mt-auto">
+                      <button
+                        onClick={() =>
+                          navigate(`/dashboard/chat?persona=${persona.id}`)
+                        }
+                        className="flex-1 px-3 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-xs font-medium transition-colors"
+                      >
+                        Use Persona
+                      </button>
+                      <button
+                        onClick={() =>
+                          navigate(`/dashboard/create?type=persona&edit=${persona.id}`)
+                        }
+                        className="p-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+                        title="Edit"
+                      >
+                        <Edit className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </motion.div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function EmptyState({ icon: Icon, title, description, actionLabel, onAction }) {
+  return (
+    <div className="bg-white dark:bg-gray-800 border border-dashed border-gray-300 dark:border-gray-700 rounded-xl p-10 text-center">
+      <Icon className="w-12 h-12 mx-auto mb-3 text-gray-400 dark:text-gray-500" />
+      <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-1">
+        {title}
+      </h3>
+      <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+        {description}
+      </p>
+      <button
+        onClick={onAction}
+        className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors"
+      >
+        <Plus className="w-4 h-4" />
+        {actionLabel}
+      </button>
+    </div>
+  );
+}

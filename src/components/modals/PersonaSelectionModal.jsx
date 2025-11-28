@@ -237,6 +237,21 @@ function PersonaCard({ persona, isSelected, onSelect, theme }) {
               {persona.name}
             </h3>
           </div>
+          <div className="flex items-center gap-2 mt-1">
+            <code className="text-xs font-mono text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded">
+              {persona.public_id}
+            </code>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                navigator.clipboard.writeText(persona.public_id);
+              }}
+              className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+              title="Copy ID"
+            >
+              
+            </button>
+          </div>
           <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
             {persona.description || persona.persona_role}
           </p>

@@ -65,6 +65,7 @@ export default function CreateAvatar() {
             const data = await usageRes.json();
             if (data.success) setUsage(data.data);
           }
+
         }
       } catch (err) {
         console.error("Error fetching data:", err);

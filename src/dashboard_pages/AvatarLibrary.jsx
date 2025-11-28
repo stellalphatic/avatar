@@ -1,122 +1,351 @@
-// src/dashboard_pages/AvatarLibrary.jsx
-import React, { useState, useEffect, Fragment } from 'react';
-import { useAuth } from '../contexts/AuthContext';
-import { supabase } from '../lib/supabase';
-import { Link, useNavigate } from 'react-router-dom';
-import { PlusCircle, Loader2, User, Users, MoreVertical, Edit, Trash2, Globe, Lock } from 'lucide-react';
-import { Menu, Transition } from '@headlessui/react';
+import { useState, useEffect } from "react";
+import { useAuth } from "../contexts/AuthContext";
+import supabase from "../supabaseClient";
+import { useNavigate } from "react-router-dom";
+import {
+  Search,
+  Loader2,
+  User,
+  Globe,
+  Copy,
+  CheckCircle2,
+  Sparkles,
+  Brain,
+} from "lucide-react";
+import { motion } from "framer-motion";
 
-// Reusable card with Edit/Delete dropdown
-const AvatarCard = ({ avatar, onEdit, onDelete }) => (
-  <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md border border-gray-200 dark:border-gray-700 group flex flex-col">
-    <div className="relative">
-      <img src={avatar.image_url || 'https://placehold.co/400x300?text=Avatar'} alt={avatar.name} className="w-full h-40 object-cover rounded-t-lg"/>
-      <div className="absolute top-2 right-2">
-        <Menu as="div" className="relative inline-block text-left">
-          <Menu.Button className="p-1.5 rounded-full bg-black/30 text-white hover:bg-black/50 focus:outline-none opacity-0 group-hover:opacity-100 transition-opacity">
-            <MoreVertical size={16} />
-          </Menu.Button>
-          <Transition as={Fragment} enter="transition ease-out duration-100" enterFrom="transform opacity-0 scale-95" enterTo="transform opacity-100 scale-100" leave="transition ease-in duration-75" leaveFrom="transform opacity-100 scale-100" leaveTo="transform opacity-0 scale-95">
-            <Menu.Items className="absolute right-0 mt-2 w-40 origin-top-right divide-y divide-gray-100 dark:divide-gray-600 rounded-md bg-white dark:bg-gray-800 shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none">
-              <div className="px-1 py-1 ">
-                <Menu.Item>
-                  {({ active }) => ( <button onClick={() => onEdit(avatar)} className={`${ active ? 'bg-pink-500 text-white' : 'text-gray-900 dark:text-gray-200' } group flex w-full items-center rounded-md px-2 py-2 text-sm`}><Edit className="mr-2 h-4 w-4" /> Edit </button> )}
-                </Menu.Item>
-              </div>
-              <div className="px-1 py-1">
-                <Menu.Item>
-                  {({ active }) => ( <button onClick={() => onDelete(avatar.id)} className={`${ active ? 'bg-red-500 text-white' : 'text-red-600 dark:text-red-400' } group flex w-full items-center rounded-md px-2 py-2 text-sm`}><Trash2 className="mr-2 h-4 w-4" /> Delete </button> )}
-                </Menu.Item>
-              </div>
-            </Menu.Items>
-          </Transition>
-        </Menu>
-      </div>
-    </div>
-    <div className="p-3 flex-grow flex flex-col">
-      <h3 className="font-semibold text-sm text-gray-800 dark:text-gray-100 truncate">{avatar.name}</h3>
-      <p className="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1.5 mt-1">
-        {avatar.is_public ? <Globe size={12} className="text-green-500" /> : <Lock size={12} className="text-yellow-500" />}
-        {avatar.is_public ? 'Stock' : 'Personal'}
-      </p>
-      <div className="mt-auto pt-3">
-        <Link to={`/dashboard/conversation/new?avatarId=${avatar.id}`} className="w-full block text-center text-sm font-semibold py-1.5 bg-gray-100 dark:bg-gray-700 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors">
-          Use Avatar
-        </Link>
-      </div>
-    </div>
-  </div>
-);
-
-// NOTE: You would create separate components for the Edit and Delete Modals for cleaner code,
-// but for brevity here, I'm keeping the logic within the main component.
-
-const AvatarLibrary = () => {
+export default function AvatarLibrary() {
   const { user } = useAuth();
-  const [activeTab, setActiveTab] = useState('personal');
-  const [avatars, setAvatars] = useState([]);
+  const navigate = useNavigate();
+
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-  
-  // States for modals
-  const [showEditModal, setShowEditModal] = useState(false);
-  const [showDeleteModal, setShowDeleteModal] = useState(false);
-  const [selectedAvatar, setSelectedAvatar] = useState(null);
+  const [avatars, setAvatars] = useState([]);
+  const [personas, setPersonas] = useState([]);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [filterType, setFilterType] = useState("all");
+  const [activeTab, setActiveTab] = useState("avatars");
+  const [copiedId, setCopiedId] = useState(null);
 
   useEffect(() => {
-    // ... data fetching logic from my previous correct response
-    // This part was correct, so I'll omit it for brevity to focus on the new parts
-  }, [activeTab, user]);
+    if (user) {
+      fetchData();
+    }
+  }, [user]);
 
-  const handleEdit = (avatar) => {
-    setSelectedAvatar(avatar);
-    setShowEditModal(true);
-  };
-  
-  const handleDelete = (avatarId) => {
-    setSelectedAvatar(avatars.find(a => a.id === avatarId));
-    setShowDeleteModal(true);
+  const fetchData = async () => {
+    try {
+      setLoading(true);
+
+      // Fetch avatars
+      const { data: avatarData } = await supabase
+        .from("avatars")
+        .select("*")
+        .or(`is_public.eq.true,is_stock.eq.true`)
+        .order("created_at", { ascending: false });
+
+      setAvatars(avatarData || []);
+
+      // Fetch personas
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      if (session) {
+        const personaRes = await fetch(
+          `${import.meta.env.VITE_BACKEND_API_URL}/personas`,
+          {
+            headers: { Authorization: `Bearer ${session.access_token}` },
+          }
+        );
+
+        if (personaRes.ok) {
+          const data = await personaRes.json();
+          const publicPersonas = (data.data || []).filter(
+            (p) => p.is_public || p.is_stock
+          );
+          setPersonas(publicPersonas);
+        }
+      }
+    } catch (error) {
+      console.error("Error fetching data:", error);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const TabButton = ({ tabName, label, icon }) => (
-     <button
-      onClick={() => setActiveTab(tabName)}
-      className={`flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${activeTab === tabName ? 'bg-pink-100 text-pink-700 dark:bg-pink-900/50 dark:text-pink-300' : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'}`}
-    >
-        {icon}
-        {label}
-    </button>
-  );
+  const copyPublicId = (publicId) => {
+    navigator.clipboard.writeText(publicId);
+    setCopiedId(publicId);
+    setTimeout(() => setCopiedId(null), 2000);
+  };
+
+  const filteredAvatars = avatars.filter((avatar) => {
+    const matchesSearch =
+      avatar.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      avatar.public_id?.toLowerCase().includes(searchTerm.toLowerCase());
+
+    const matchesFilter =
+      filterType === "all" ||
+      (filterType === "stock" && avatar.is_stock) ||
+      (filterType === "public" && avatar.is_public);
+
+    return matchesSearch && matchesFilter;
+  });
+
+  const filteredPersonas = personas.filter((persona) => {
+    const matchesSearch =
+      persona.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      persona.public_id?.toLowerCase().includes(searchTerm.toLowerCase());
+
+    const matchesFilter =
+      filterType === "all" ||
+      (filterType === "stock" && persona.is_stock) ||
+      (filterType === "public" && persona.is_public);
+
+    return matchesSearch && matchesFilter;
+  });
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-gray-50 dark:bg-gray-900">
+        <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
+      </div>
+    );
+  }
 
   return (
-    <div>
-      <div className="flex justify-between items-center mb-5">
-        <h1 className="text-2xl font-bold text-gray-800 dark:text-gray-200">Avatar Library</h1>
-         <Link to="/dashboard/avatars/create" className="px-4 py-2 text-sm font-semibold text-white bg-pink-600 rounded-md hover:bg-pink-700 flex items-center gap-2">
-            <PlusCircle size={16} /> Create Avatar
-        </Link>
-      </div>
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 pb-20">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Header */}
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
+            Public Library
+          </h1>
+          <p className="text-gray-600 dark:text-gray-400">
+            Explore public avatars and personas available for everyone
+          </p>
+        </div>
 
-      <div className="mb-5 flex items-center gap-x-2 border-b border-gray-200 dark:border-gray-700">
-          <TabButton tabName="personal" label="Personal" icon={<User size={16}/>} />
-          <TabButton tabName="stock" label="Stock" icon={<Users size={16}/>} />
-      </div>
+        {/* Tabs */}
+        <div className="mb-6 border-b border-gray-200 dark:border-gray-700">
+          <div className="flex space-x-8">
+            <button
+              onClick={() => setActiveTab("avatars")}
+              className={`pb-4 px-1 border-b-2 font-medium text-sm transition-colors ${
+                activeTab === "avatars"
+                  ? "border-blue-500 text-blue-600 dark:text-blue-400"
+                  : "border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
+              }`}
+            >
+              <div className="flex items-center gap-2">
+                <User className="w-4 h-4" />
+                Avatars ({filteredAvatars.length})
+              </div>
+            </button>
+            <button
+              onClick={() => setActiveTab("personas")}
+              className={`pb-4 px-1 border-b-2 font-medium text-sm transition-colors ${
+                activeTab === "personas"
+                  ? "border-purple-500 text-purple-600 dark:text-purple-400"
+                  : "border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
+              }`}
+            >
+              <div className="flex items-center gap-2">
+                <Brain className="w-4 h-4" />
+                Personas ({filteredPersonas.length})
+              </div>
+            </button>
+          </div>
+        </div>
 
-      {/* Grid rendering logic here... */}
-      {/* Example: */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-5">
-        {/* Mock Data for demonstration */}
-        {[
-          {id: '1', name: 'Sales Coach', image_url: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2', is_public: false},
-          {id: '2', name: 'History Teacher', image_url: 'https://images.unsplash.com/photo-1580894732444-8ecded794825', is_public: true},
-        ].map(avatar => <AvatarCard key={avatar.id} avatar={avatar} onEdit={handleEdit} onDelete={handleDelete} />)}
-      </div>
+        {/* Search & Filter */}
+        <div className="mb-6 flex flex-col sm:flex-row gap-4">
+          <div className="flex-1 relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+            <input
+              type="text"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder={`Search ${activeTab}...`}
+              className="w-full pl-10 pr-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            />
+          </div>
+          <select
+            value={filterType}
+            onChange={(e) => setFilterType(e.target.value)}
+            className="px-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          >
+            <option value="all">All</option>
+            <option value="stock">Stock Only</option>
+            <option value="public">Community</option>
+          </select>
+        </div>
 
-      {/* Add Edit and Delete Modals Here */}
-      {/* <EditAvatarModal isOpen={showEditModal} setIsOpen={setShowEditModal} avatar={selectedAvatar} /> */}
-      {/* <DeleteConfirmationModal isOpen={showDeleteModal} setIsOpen={setShowDeleteModal} avatar={selectedAvatar} /> */}
+        {/* Content */}
+        {activeTab === "avatars" ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+            {filteredAvatars.map((avatar) => (
+              <motion.div
+                key={avatar.id}
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                className="bg-white dark:bg-gray-800 rounded-xl overflow-hidden border border-gray-200 dark:border-gray-700 hover:shadow-lg transition-shadow"
+              >
+                {/* Avatar Image */}
+                <div className="aspect-square bg-gradient-to-br from-blue-100 to-purple-100 dark:from-blue-900/20 dark:to-purple-900/20 relative">
+                  {avatar.image_url ? (
+                    <img
+                      src={avatar.image_url}
+                      alt={avatar.name}
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center text-gray-400">
+                      <User className="w-20 h-20" />
+                    </div>
+                  )}
+                  {/* Badges */}
+                  <div className="absolute top-2 right-2 flex gap-2">
+                    {avatar.is_stock && (
+                      <span className="px-2 py-1 bg-blue-500 text-white text-xs rounded-full flex items-center gap-1">
+                        <Sparkles className="w-3 h-3" />
+                        Stock
+                      </span>
+                    )}
+                    {avatar.is_public && (
+                      <span className="px-2 py-1 bg-green-500 text-white text-xs rounded-full flex items-center gap-1">
+                        <Globe className="w-3 h-3" />
+                        Public
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Info */}
+                <div className="p-4">
+                  <h3 className="font-bold text-gray-900 dark:text-white mb-1 truncate">
+                    {avatar.name}
+                  </h3>
+                  {avatar.description && (
+                    <p className="text-sm text-gray-600 dark:text-gray-400 mb-3 line-clamp-2">
+                      {avatar.description}
+                    </p>
+                  )}
+
+                  {/* Public ID */}
+                  <div className="flex items-center gap-2 mb-3">
+                    <code className="flex-1 text-xs font-mono text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-900 px-2 py-1 rounded truncate">
+                      {avatar.public_id}
+                    </code>
+                    <button
+                      onClick={() => copyPublicId(avatar.public_id)}
+                      className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors"
+                    >
+                      {copiedId === avatar.public_id ? (
+                        <CheckCircle2 className="w-4 h-4 text-green-500" />
+                      ) : (
+                        <Copy className="w-4 h-4 text-gray-400" />
+                      )}
+                    </button>
+                  </div>
+
+                  <button
+                    onClick={() => navigate(`/dashboard/chat?avatar=${avatar.id}`)}
+                    className="w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors text-sm font-medium"
+                  >
+                    Start Conversation
+                  </button>
+                </div>
+              </motion.div>
+            ))}
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {filteredPersonas.map((persona) => (
+              <motion.div
+                key={persona.id}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="bg-white dark:bg-gray-800 rounded-xl p-6 border border-gray-200 dark:border-gray-700 hover:shadow-lg transition-shadow"
+              >
+                <div className="flex items-start gap-4">
+                  <div className="w-14 h-14 bg-gradient-to-br from-purple-500 to-pink-500 rounded-xl flex items-center justify-center flex-shrink-0">
+                    <Brain className="w-7 h-7 text-white" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-2">
+                      <h3 className="font-bold text-lg text-gray-900 dark:text-white">
+                        {persona.name}
+                      </h3>
+                      {persona.is_stock && (
+                        <span className="px-2 py-0.5 bg-blue-100 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400 text-xs rounded-full">
+                          Stock
+                        </span>
+                      )}
+                      {persona.is_public && (
+                        <span className="px-2 py-0.5 bg-green-100 dark:bg-green-900/20 text-green-700 dark:text-green-400 text-xs rounded-full">
+                          Public
+                        </span>
+                      )}
+                    </div>
+                    {persona.persona_role && (
+                      <p className="text-sm text-purple-600 dark:text-purple-400 font-medium mb-2">
+                        {persona.persona_role}
+                      </p>
+                    )}
+                    {persona.description && (
+                      <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
+                        {persona.description}
+                      </p>
+                    )}
+
+                    {/* Public ID */}
+                    <div className="flex items-center gap-2 mb-3">
+                      <code className="flex-1 text-xs font-mono text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-900 px-2 py-1 rounded truncate">
+                        {persona.public_id}
+                      </code>
+                      <button
+                        onClick={() => copyPublicId(persona.public_id)}
+                        className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors"
+                      >
+                        {copiedId === persona.public_id ? (
+                          <CheckCircle2 className="w-4 h-4 text-green-500" />
+                        ) : (
+                          <Copy className="w-4 h-4 text-gray-400" />
+                        )}
+                      </button>
+                    </div>
+
+                    <button
+                      onClick={() => navigate(`/dashboard/chat?persona=${persona.id}`)}
+                      className="w-full px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors text-sm font-medium"
+                    >
+                      Use This Persona
+                    </button>
+                  </div>
+                </div>
+              </motion.div>
+            ))}
+          </div>
+        )}
+
+        {/* Empty State */}
+        {((activeTab === "avatars" && filteredAvatars.length === 0) ||
+          (activeTab === "personas" && filteredPersonas.length === 0)) && (
+          <div className="text-center py-12">
+            <div className="text-gray-400 dark:text-gray-500 mb-2">
+              {activeTab === "avatars" ? (
+                <User className="w-16 h-16 mx-auto mb-3 opacity-50" />
+              ) : (
+                <Brain className="w-16 h-16 mx-auto mb-3 opacity-50" />
+              )}
+              <p className="text-sm">
+                No {activeTab} found matching your criteria
+              </p>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
-};
-
-export default AvatarLibrary;
+}

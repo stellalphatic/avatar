@@ -1,6 +1,13 @@
-import { Square, Mic, MicOff, Volume2, MessageSquare } from "lucide-react";
+import {
+  Square,
+  Mic,
+  MicOff,
+  Volume2,
+  MessageSquare,
+  User,
+} from "lucide-react";
 import PropTypes from "prop-types";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 
 export default function FullScreenConversation({
   avatar,
@@ -11,13 +18,22 @@ export default function FullScreenConversation({
   connectionStatus,
   callDuration,
   isSpeaking,
-  messages,
+  messages, // ✅ Real-time messages from LiveKit
   error,
   onEndCall,
   onToggleMicrophone,
-  videoElementRef, // ✅ Use passed ref
+  videoElementRef,
 }) {
   const [isMuted, setIsMuted] = useState(false);
+  const [showTranscript, setShowTranscript] = useState(true); // ✅ Toggle transcript
+  const messagesEndRef = useRef(null);
+
+  // ✅ Auto-scroll to bottom when new message arrives
+  useEffect(() => {
+    if (messagesEndRef.current && showTranscript) {
+      messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [messages, showTranscript]);
 
   // ✅ Ensure video element is ready
   useEffect(() => {
@@ -42,160 +58,196 @@ export default function FullScreenConversation({
 
   return (
     <div className="fixed inset-0 bg-black z-50 flex flex-col">
-      {/* Top Bar */}
-      <div className="absolute top-0 left-0 right-0 p-6 bg-gradient-to-b from-black/80 to-transparent z-10">
-        <div className="flex justify-between items-center">
-          <div className="flex items-center gap-4">
-            <img
-              src={avatar?.image_url}
-              alt={avatar?.name}
-              className="w-12 h-12 rounded-full object-cover border-2 border-white"
-            />
-            <div>
-              <h2 className="text-white font-bold text-lg">{avatar?.name}</h2>
-              <p className="text-gray-300 text-sm">{persona?.name}</p>
+      {/* Header */}
+      <div className="absolute top-0 left-0 right-0 bg-gradient-to-b from-black/80 to-transparent z-10 p-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-white text-xl font-semibold">
+              {persona?.name || "Conversation"}
+            </h2>
+            <div className="flex items-center gap-2 text-white/80 text-sm">
+              {isConnecting && (
+                <span className="flex items-center gap-1">
+                  <div className="animate-pulse w-2 h-2 bg-yellow-400 rounded-full" />
+                  {connectionStatus}
+                </span>
+              )}
+              {isConnected && (
+                <>
+                  <span className="flex items-center gap-1">
+                    <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse" />
+                    Connected
+                  </span>
+                  <span>•</span>
+                  <span>{formatTime(callDuration)}</span>
+                </>
+              )}
             </div>
           </div>
 
-          <div className="flex items-center gap-4">
-            <div className="text-white font-mono text-xl">
-              {formatTime(callDuration)}
-            </div>
-            {isSpeaking && (
-              <div className="flex items-center gap-2 bg-green-500 text-white px-4 py-2 rounded-full animate-pulse">
-                <Volume2 size={16} />
-                <span className="text-sm font-medium">Speaking</span>
-              </div>
-            )}
-          </div>
+          {/* Toggle Transcript Button */}
+          <button
+            onClick={() => setShowTranscript(!showTranscript)}
+            className="p-2 bg-white/20 hover:bg-white/30 rounded-lg transition-colors"
+          >
+            <MessageSquare className="w-5 h-5 text-white" />
+          </button>
         </div>
       </div>
 
-      {/* Video/Avatar Display */}
-      <div className="flex-1 flex items-center justify-center relative">
-        {isConnecting ? (
-          <div className="text-center text-white">
-            <div className="w-24 h-24 border-4 border-purple-500 border-t-transparent rounded-full animate-spin mx-auto mb-6" />
-            <h2 className="text-2xl font-bold mb-2">Connecting...</h2>
-            <p className="text-gray-400">{connectionStatus}</p>
-          </div>
-        ) : isConnected ? (
-          conversationType === "video" ? (
-            // ✅ USE PASSED videoElementRef
-            <div
-              style={{
-                width: "85vw",
-                maxWidth: "1400px",
-                height: "75vh",
-                background: "#111",
-                borderRadius: 16,
-                overflow: "hidden",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.5)",
-              }}
-            >
-              <video
-                ref={videoElementRef}
-                autoPlay
-                playsInline
-                muted
-                style={{
-                  width: "100%",
-                  height: "100%",
-                  objectFit: "cover",
-                  //   transform: "scale(1.05)",
-                  transform: "scaleX(1.52)",
-                }}
-                // className="w-full h-full object-cover"
-                onLoadedData={() =>
-                  console.log("✅ [FullScreenConversation] Video loaded")
-                }
-                onPlay={() =>
-                  console.log("✅ [FullScreenConversation] Video playing")
-                }
-                onError={(e) =>
-                  console.error("❌ [FullScreenConversation] Video error:", e)
-                }
-              />
-            </div>
+      {/* Main Content Area */}
+      <div className="flex-1 flex">
+        {/* Video/Avatar Area */}
+        <div
+          className={`${
+            showTranscript ? "w-2/3" : "w-full"
+          } relative flex items-center justify-center`}
+        >
+          {conversationType === "video" ? (
+            <video
+              ref={videoElementRef}
+              className="w-full h-full object-contain"
+              autoPlay
+              playsInline
+            />
           ) : (
-            <div className="text-center">
-              <div className="relative inline-block">
+            <div className="flex flex-col items-center justify-center">
+              {avatar?.image_url ? (
                 <img
-                  src={avatar?.image_url}
-                  alt={avatar?.name}
-                  className="w-80 h-80 rounded-full object-cover border-8 border-purple-500 shadow-2xl"
+                  src={avatar.image_url}
+                  alt={avatar.name}
+                  className="w-64 h-64 rounded-full object-cover border-4 border-white/20"
                 />
-                {isSpeaking && (
-                  <div className="absolute -bottom-4 -right-4 bg-green-500 text-white p-6 rounded-full animate-pulse">
-                    <Volume2 size={32} />
-                  </div>
-                )}
-              </div>
+              ) : (
+                <div className="w-64 h-64 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
+                  <User className="w-32 h-32 text-white" />
+                </div>
+              )}
+              <p className="text-white mt-4 text-lg">{avatar?.name}</p>
+              {isSpeaking && (
+                <div className="mt-4 flex gap-1">
+                  {[...Array(5)].map((_, i) => (
+                    <div
+                      key={i}
+                      className="w-1 bg-blue-500 rounded-full animate-pulse"
+                      style={{
+                        height: `${Math.random() * 30 + 10}px`,
+                        animationDelay: `${i * 0.1}s`,
+                      }}
+                    />
+                  ))}
+                </div>
+              )}
             </div>
-          )
-        ) : null}
+          )}
+
+          {error && (
+            <div className="absolute top-20 left-1/2 transform -translate-x-1/2 bg-red-500 text-white px-4 py-2 rounded-lg shadow-lg">
+              {error}
+            </div>
+          )}
+        </div>
+
+        {/* ✅ Real-Time Transcript Panel */}
+        {showTranscript && (
+          <div className="w-1/3 bg-gray-900/95 backdrop-blur-sm flex flex-col">
+            <div className="p-4 border-b border-gray-700">
+              <h3 className="text-white font-semibold flex items-center gap-2">
+                <MessageSquare className="w-5 h-5" />
+                Live Transcript
+              </h3>
+              <p className="text-gray-400 text-xs mt-1">
+                {messages.length} message{messages.length !== 1 ? "s" : ""}
+              </p>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-4 space-y-3">
+              {messages.length === 0 ? (
+                <div className="text-center text-gray-400 mt-8">
+                  <MessageSquare className="w-12 h-12 mx-auto mb-2 opacity-50" />
+                  <p className="text-sm">
+                    Waiting for conversation to start...
+                  </p>
+                </div>
+              ) : (
+                messages.map((message, index) => (
+                  <div
+                    key={index}
+                    className={`flex gap-2 ${
+                      message.type === "user" ? "justify-end" : "justify-start"
+                    }`}
+                  >
+                    <div
+                      className={`max-w-[80%] rounded-lg px-3 py-2 ${
+                        message.type === "user"
+                          ? "bg-blue-600 text-white"
+                          : message.type === "avatar"
+                          ? "bg-gray-700 text-white"
+                          : "bg-gray-800 text-gray-400"
+                      }`}
+                    >
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="text-xs font-semibold opacity-70">
+                          {message.type === "user"
+                            ? "You"
+                            : message.type === "avatar"
+                            ? avatar?.name || "Avatar"
+                            : "System"}
+                        </span>
+                        {message.timestamp && (
+                          <span className="text-[10px] opacity-50">
+                            {new Date(message.timestamp).toLocaleTimeString()}
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-sm leading-relaxed">{message.text}</p>
+                    </div>
+                  </div>
+                ))
+              )}
+              <div ref={messagesEndRef} />
+            </div>
+          </div>
+        )}
       </div>
 
-      {/* Bottom Controls */}
-      <div className="absolute bottom-0 left-0 right-0 p-8 bg-gradient-to-t from-black/80 to-transparent">
-        <div className="flex justify-center items-center gap-6">
+      {/* Controls */}
+      <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent z-10 p-6">
+        <div className="flex items-center justify-center gap-4">
+          {/* Mute Button */}
           <button
             onClick={handleToggleMute}
-            className={`p-6 rounded-full transition-all transform hover:scale-110 ${
+            disabled={!isConnected}
+            className={`p-4 rounded-full transition-all ${
               isMuted
                 ? "bg-red-500 hover:bg-red-600"
-                : "bg-gray-700 hover:bg-gray-600"
-            }`}
+                : "bg-white/20 hover:bg-white/30"
+            } ${!isConnected ? "opacity-50 cursor-not-allowed" : ""}`}
           >
             {isMuted ? (
-              <MicOff size={28} className="text-white" />
+              <MicOff className="w-6 h-6 text-white" />
             ) : (
-              <Mic size={28} className="text-white" />
+              <Mic className="w-6 h-6 text-white" />
             )}
           </button>
 
+          {/* End Call Button */}
           <button
             onClick={onEndCall}
-            className="p-6 bg-red-500 hover:bg-red-600 rounded-full transition-all transform hover:scale-110"
+            className="p-4 bg-red-500 hover:bg-red-600 rounded-full transition-all"
           >
-            <Square size={28} className="text-white" />
+            <Square className="w-6 h-6 text-white" />
           </button>
+
+          {/* Speaking Indicator */}
+          {isSpeaking && (
+            <div className="flex items-center gap-2 text-white bg-white/20 px-4 py-2 rounded-full">
+              <Volume2 className="w-5 h-5 animate-pulse" />
+              <span className="text-sm">Avatar is speaking...</span>
+            </div>
+          )}
         </div>
       </div>
-
-      {/* Transcript (Optional - bottom right) */}
-      {messages.length > 0 && (
-        <div className="absolute bottom-24 right-8 w-96 max-h-96 bg-black/80 backdrop-blur-lg rounded-2xl p-4 overflow-y-auto">
-          <div className="flex items-center gap-2 mb-3 text-white">
-            <MessageSquare size={18} />
-            <span className="font-semibold text-sm">Transcript</span>
-          </div>
-          <div className="space-y-2">
-            {messages.map((msg, idx) => (
-              <div
-                key={idx}
-                className={`text-sm p-2 rounded-lg ${
-                  msg.type === "user"
-                    ? "bg-purple-500 text-white ml-8"
-                    : "bg-gray-700 text-white mr-8"
-                }`}
-              >
-                {msg.text}
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Error Display */}
-      {error && (
-        <div className="absolute top-24 left-1/2 transform -translate-x-1/2 bg-red-500 text-white px-6 py-3 rounded-xl shadow-lg">
-          {error}
-        </div>
-      )}
     </div>
   );
 }
@@ -213,6 +265,5 @@ FullScreenConversation.propTypes = {
   error: PropTypes.string,
   onEndCall: PropTypes.func.isRequired,
   onToggleMicrophone: PropTypes.func.isRequired,
-  videoElementRef: PropTypes.object, // ✅ Add this
-  theme: PropTypes.string.isRequired,
+  videoElementRef: PropTypes.object,
 };
