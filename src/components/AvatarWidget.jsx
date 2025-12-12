@@ -5,8 +5,6 @@ import {
   X,
   Mic,
   MicOff,
-  Volume2,
-  VolumeX,
   Loader2,
   PhoneOff,
 } from "lucide-react";
@@ -21,7 +19,6 @@ const AvatarWidget = () => {
   const [isMuted, setIsMuted] = useState(false);
   const [isSpeakerMuted, setIsSpeakerMuted] = useState(false);
   const [error, setError] = useState("");
-  const [networkQuality, setNetworkQuality] = useState(5);
 
   // Transcript state
   const [messages, setMessages] = useState([]);
@@ -43,8 +40,15 @@ const AvatarWidget = () => {
       setIsConnecting(true);
       setError("");
 
-      await navigator.mediaDevices.getUserMedia({ audio: true });
-
+      // --- CRITICAL FIX: Enhanced Audio Processing ---
+      // Enable noise suppression and echo cancellation to filter background noise
+      await navigator.mediaDevices.getUserMedia({ 
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true
+        } 
+      });
       const response = await fetch(
         `${import.meta.env.VITE_BACKEND_API_URL}/demo/start-call`,
         {
@@ -54,6 +58,7 @@ const AvatarWidget = () => {
             agent_type: "standard",
             voice_name: "female-1",
             language: "en",
+            persona_id: "DEMO002",
             custom_greeting:
               "Hi! I'm your MetaPresence assistant. How can I help you today?",
           }),
@@ -63,7 +68,21 @@ const AvatarWidget = () => {
       if (!response.ok) throw new Error("Failed to start call");
       const { data } = await response.json();
 
-      const room = new Room({ adaptiveStream: true, dynacast: true });
+      // const room = new Room({ adaptiveStream: true, dynacast: true });
+
+      const room = new Room({
+        adaptiveStream: true,
+        dynacast: true,
+        // Publish options with audio processing
+        publishDefaults: {
+          audioPreset: {
+            maxBitrate: 32000,
+          },
+          dtx: true, // Discontinuous Transmission to save bandwidth on silence
+          red: true, // Redundant Audio Data for packet loss recovery
+        },
+      });
+
       roomRef.current = room;
 
       room.on(RoomEvent.Connected, () => {
