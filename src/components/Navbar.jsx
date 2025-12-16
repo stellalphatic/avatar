@@ -1,42 +1,49 @@
-"use client"
+"use client";
 
-import { useState } from "react"
-import { motion } from "framer-motion"
-import { Link, useNavigate } from "react-router-dom" // Import useNavigate
-import { Menu, X, Moon, Sun } from "lucide-react" // Import Moon and Sun icons
-import { useTheme } from "../contexts/ThemeContext"
-import { useAuth } from "../contexts/AuthContext" // Import useAuth
+import { useState } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import { Link, useNavigate } from "react-router-dom"; // Import useNavigate
+import { Menu, X, Moon, Sun, ChevronDown } from "lucide-react"; // Import Moon and Sun icons
+import { useTheme } from "../contexts/ThemeContext";
+import { useAuth } from "../contexts/AuthContext"; // Import useAuth
 
 const Navbar = () => {
-  const [isOpen, setIsOpen] = useState(false)
-  const { theme, toggleTheme } = useTheme()
-  const { user, signOut } = useAuth() // Get user and signOut from AuthContext
-  const navigate = useNavigate() // Initialize useNavigate
+  const [isOpen, setIsOpen] = useState(false);
+  const [isServicesOpen, setIsServicesOpen] = useState(false);
+  const { theme, toggleTheme } = useTheme();
+  const { user, signOut } = useAuth(); // Get user and signOut from AuthContext
+  const navigate = useNavigate(); // Initialize useNavigate
 
   // Function to handle scrolling to sections
   const handleScrollToSection = (id) => {
-    const element = document.getElementById(id)
+    const element = document.getElementById(id);
     if (element) {
-      element.scrollIntoView({ behavior: "smooth", block: "start" })
-      setIsOpen(false) // Close mobile menu after clicking a link
+      element.scrollIntoView({ behavior: "smooth", block: "start" });
+      setIsOpen(false); // Close mobile menu after clicking a link
     }
-  }
+  };
 
   // Original nav links, now using 'id' for scroll-to-section
   const navLinks = [
     { name: "About", id: "about" },
     { name: "Pricing", id: "pricing" },
     { name: "API Docs", href: "https://docs.metapresence.my" },
-  ]
+  ];
+
+  // Services dropdown items
+  const services = [
+    { name: "Awaaz", href: "https://awaaz.metapresence.my" },
+    { name: "Bolo", href: "https://bolo.metapresence.my" },
+  ];
 
   const handleLogout = async () => {
-    const { error } = await signOut()
+    const { error } = await signOut();
     if (!error) {
-      navigate("/") // Redirect to home after logout
+      navigate("/"); // Redirect to home after logout
     } else {
-      console.error("Logout error:", error.message)
+      console.error("Logout error:", error.message);
     }
-  }
+  };
 
   return (
     <nav
@@ -92,8 +99,65 @@ const Navbar = () => {
                 >
                   {link.name}
                 </motion.a>
-              ),
+              )
             )}
+
+            {/* Services Dropdown */}
+            <div
+              className="relative"
+              onMouseEnter={() => setIsServicesOpen(true)}
+              onMouseLeave={() => setIsServicesOpen(false)}
+            >
+              <motion.button
+                className={`flex items-center gap-1 text-sm font-medium transition-colors duration-200 ${
+                  theme === "light"
+                    ? "text-gray-600 hover:text-purple-600"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+                whileHover={{ y: -2 }}
+              >
+                Services
+                <ChevronDown
+                  size={16}
+                  className={`transition-transform duration-200 ${
+                    isServicesOpen ? "rotate-180" : ""
+                  }`}
+                />
+              </motion.button>
+
+              {/* Dropdown Menu */}
+              <AnimatePresence>
+                {isServicesOpen && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -10 }}
+                    transition={{ duration: 0.2 }}
+                    className={`absolute top-full left-0 mt-2 w-48 rounded-lg shadow-lg py-2 z-50 ${
+                      theme === "light"
+                        ? "bg-white border border-gray-200"
+                        : "bg-card border border-border"
+                    }`}
+                  >
+                    {services.map((service) => (
+                      <a
+                        key={service.name}
+                        href={service.href}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className={`block px-4 py-2 text-sm transition-colors duration-200 ${
+                          theme === "light"
+                            ? "text-gray-700 hover:bg-gray-100 hover:text-purple-600"
+                            : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                        }`}
+                      >
+                        {service.name}
+                      </a>
+                    ))}
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
 
             {/* Theme Toggle */}
             <motion.button
@@ -103,7 +167,8 @@ const Navbar = () => {
               whileHover={{ scale: 1.1 }}
               whileTap={{ scale: 0.9 }}
             >
-              {theme === "light" ? <Moon size={20} /> : <Sun size={20} />} {/* Reverted to Lucide icons */}
+              {theme === "light" ? <Moon size={20} /> : <Sun size={20} />}{" "}
+              {/* Reverted to Lucide icons */}
             </motion.button>
 
             {/* Conditional Auth Buttons */}
@@ -159,17 +224,24 @@ const Navbar = () => {
               whileHover={{ scale: 1.1 }}
               whileTap={{ scale: 0.9 }}
             >
-              {theme === "light" ? <Moon size={20} /> : <Sun size={20} />} {/* Reverted to Lucide icons */}
+              {theme === "light" ? <Moon size={20} /> : <Sun size={20} />}{" "}
+              {/* Reverted to Lucide icons */}
             </motion.button>
             <button
               onClick={() => setIsOpen(!isOpen)}
               className={`inline-flex items-center justify-center p-2 rounded-md ${
-                theme === "light" ? "text-gray-700 hover:bg-gray-100" : "text-gray-400 hover:bg-gray-700"
+                theme === "light"
+                  ? "text-gray-700 hover:bg-gray-100"
+                  : "text-gray-400 hover:bg-gray-700"
               } focus:outline-none focus:ring-2 focus:ring-inset focus:ring-purple-500`}
               aria-expanded="false"
             >
               <span className="sr-only">Open main menu</span>
-              {isOpen ? <X className="block h-6 w-6" /> : <Menu className="block h-6 w-6" />}
+              {isOpen ? (
+                <X className="block h-6 w-6" />
+              ) : (
+                <Menu className="block h-6 w-6" />
+              )}
             </button>
           </div>
         </div>
@@ -184,7 +256,11 @@ const Navbar = () => {
           closed: { opacity: 0, height: 0 },
         }}
         transition={{ duration: 0.3 }}
-        className={`md:hidden ${isOpen ? "block" : "hidden"} ${theme === "light" ? "bg-white border-t border-gray-200" : "bg-card border-t border-border"}`}
+        className={`md:hidden ${isOpen ? "block" : "hidden"} ${
+          theme === "light"
+            ? "bg-white border-t border-gray-200"
+            : "bg-card border-t border-border"
+        }`}
       >
         <div className="px-2 pt-2 pb-3 space-y-1 sm:px-3">
           {navLinks.map((link) =>
@@ -193,7 +269,9 @@ const Navbar = () => {
                 key={link.name}
                 onClick={() => handleScrollToSection(link.id)}
                 className={`block px-3 py-2 rounded-md text-base font-medium text-left ${
-                  theme === "light" ? "text-gray-700 hover:bg-gray-100" : "text-muted-foreground hover:bg-muted"
+                  theme === "light"
+                    ? "text-gray-700 hover:bg-gray-100"
+                    : "text-muted-foreground hover:bg-muted"
                 }`}
               >
                 {link.name}
@@ -203,20 +281,68 @@ const Navbar = () => {
                 key={link.name}
                 to={link.href}
                 className={`block px-3 py-2 rounded-md text-base font-medium text-left ${
-                  theme === "light" ? "text-gray-700 hover:bg-gray-100" : "text-muted-foreground hover:bg-muted"
+                  theme === "light"
+                    ? "text-gray-700 hover:bg-gray-100"
+                    : "text-muted-foreground hover:bg-muted"
                 }`}
                 onClick={() => setIsOpen(false)}
               >
                 {link.name}
               </Link>
-            ),
+            )
           )}
+
+          {/* Services Dropdown in Mobile */}
+          <div>
+            <button
+              onClick={() => setIsServicesOpen(!isServicesOpen)}
+              className={`flex items-center justify-between w-full px-3 py-2 rounded-md text-base font-medium text-left ${
+                theme === "light"
+                  ? "text-gray-700 hover:bg-gray-100"
+                  : "text-muted-foreground hover:bg-muted"
+              }`}
+            >
+              Services
+              <ChevronDown
+                size={16}
+                className={`transition-transform duration-200 ${
+                  isServicesOpen ? "rotate-180" : ""
+                }`}
+              />
+            </button>
+            {isServicesOpen && (
+              <div className="pl-4 mt-1 space-y-1">
+                {services.map((service) => (
+                  <a
+                    key={service.name}
+                    href={service.href}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className={`block px-3 py-2 rounded-md text-sm font-medium ${
+                      theme === "light"
+                        ? "text-gray-600 hover:bg-gray-100 hover:text-purple-600"
+                        : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                    }`}
+                    onClick={() => {
+                      setIsOpen(false);
+                      setIsServicesOpen(false);
+                    }}
+                  >
+                    {service.name}
+                  </a>
+                ))}
+              </div>
+            )}
+          </div>
+
           {user ? (
             <>
               <Link
                 to="/dashboard"
                 className={`block w-full text-center px-3 py-2 rounded-md text-base font-medium ${
-                  theme === "light" ? "text-purple-600 hover:bg-gray-100" : "text-purple-400 hover:bg-muted"
+                  theme === "light"
+                    ? "text-purple-600 hover:bg-gray-100"
+                    : "text-purple-400 hover:bg-muted"
                 }`}
                 onClick={() => setIsOpen(false)}
               >
@@ -234,7 +360,9 @@ const Navbar = () => {
               <Link
                 to="/auth"
                 className={`block w-full text-center px-3 py-2 rounded-md text-base font-medium ${
-                  theme === "light" ? "text-purple-600 hover:bg-gray-100" : "text-purple-400 hover:bg-muted"
+                  theme === "light"
+                    ? "text-purple-600 hover:bg-gray-100"
+                    : "text-purple-400 hover:bg-muted"
                 }`}
                 onClick={() => setIsOpen(false)}
               >
@@ -252,7 +380,7 @@ const Navbar = () => {
         </div>
       </motion.div>
     </nav>
-  )
-}
+  );
+};
 
-export default Navbar
+export default Navbar;
